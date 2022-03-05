@@ -31,6 +31,10 @@ class BoundingBoxTest(absltest.TestCase):
     self.assertEqual([4, 5, 6], list(b.end))
     self.assertEqual([3, 3, 3], list(b.size))
 
+  def test_assign(self):
+    b = Box(start=[1, 2, 3], end=[4, 5, 6])
+    self.assertEqual(1, b.start[0])
+
   def test_construction_start_size(self):
     b = Box(start=[1, 2, 3], size=[3, 3, 3])
     self.assertEqual(3, b.rank)
@@ -76,32 +80,23 @@ class BoundingBoxTest(absltest.TestCase):
   def test_attribute_setting(self):
     b = Box(start=(0, 1, 2), end=(3, 4, 5))
     np.testing.assert_array_equal((3, 3, 3), b.size)
-
-    b.end = (2, 3, 4)
-    np.testing.assert_array_equal((2, 3, 4), b.end)
     np.testing.assert_array_equal((0, 1, 2), b.start)
-    np.testing.assert_array_equal((2, 2, 2), b.size)
+    np.testing.assert_array_equal((3, 4, 5), b.end)
 
-    b.size = (7, 7, 7)
-    np.testing.assert_array_equal((7, 7, 7), b.size)
-    np.testing.assert_array_equal((0, 1, 2), b.start)
-    np.testing.assert_array_equal((7, 8, 9), b.end)
+    with self.assertRaises(AttributeError):
+      b.start = (2, 3, 4)
+    with self.assertRaises(AttributeError):
+      b.end = (2, 3, 4)
+    with self.assertRaises(AttributeError):
+      b.size = (2, 3, 4)
 
-    b.start = (5, 6, 7)
-    np.testing.assert_array_equal((5, 6, 7), b.start)
-    np.testing.assert_array_equal((7, 8, 9), b.end)
-    np.testing.assert_array_equal((2, 2, 2), b.size)
+  def test_attribute_update(self):
+    b = Box(start=(0, 1, 2), end=(3, 4, 5))
+    with self.assertRaises(ValueError):
+      b.start[:2] //= 2
 
-  def test_attribute_rank_mismatch(self):
     with self.assertRaises(ValueError):
-      b = Box(start=(0, 1, 2), end=(3, 4, 5))
-      b.size = (0, 1)
-    with self.assertRaises(ValueError):
-      b = Box(start=(0, 1, 2), size=(3, 4, 5))
-      b.end = (0, 1)
-    with self.assertRaises(ValueError):
-      b = Box(size=(0, 1, 2), end=(3, 4, 5))
-      b.start = (0, 1)
+      b.size[:2] //= 2
 
   def test_eq(self):
     self.assertEqual(True, (Box(start=[1, 2, 3], size=[4, 5, 6]) == Box(

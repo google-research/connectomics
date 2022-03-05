@@ -14,9 +14,9 @@
 # limitations under the License.
 """Defines the BoundingBox dataclass to describe bounding boxes."""
 
-import collections
 import dataclasses
 from typing import Optional, Sequence, Tuple, Union, TypeVar, Generic, Iterable, List
+from connectomics.common import array
 
 import numpy as np
 
@@ -24,14 +24,6 @@ T = TypeVar('T', int, float)
 S = TypeVar('S', bound='BoundingBoxBase')
 FloatSequence = Union[float, Sequence[float]]
 BoolSequence = Union[bool, Sequence[bool]]
-
-
-def _is_sequence(obj):
-  # Technically sequences, but this is intended to check for numeric sequences.
-  if isinstance(obj, str) or isinstance(obj, bytes):
-    return False
-  return isinstance(obj, collections.abc.Sequence) or isinstance(
-      obj, np.ndarray)
 
 
 @dataclasses.dataclass
@@ -72,16 +64,16 @@ class BoundingBoxBase(Generic[T]):
     """
     if (end is not None) + (start is not None) + (size is not None) != 2:
       raise ValueError('Exactly two of start, end, and size must be specified')
-    if not _is_sequence(start) and not _is_sequence(end):
+    if not array.is_arraylike(start) and not array.is_arraylike(end):
       raise ValueError('At least one of start, end must be a sequence')
 
-    if _is_sequence(start):
+    if array.is_arraylike(start):
       start = np.array(start)
-    if _is_sequence(end):
+    if array.is_arraylike(end):
       end = np.array(end)
 
     if size is not None:
-      if _is_sequence(size):
+      if array.is_arraylike(size):
         size = np.array(size)
       else:
         param = start if start is not None else end
@@ -94,8 +86,8 @@ class BoundingBoxBase(Generic[T]):
       size = end - start
 
     self._start = self._tupleize(start)
-    self._end = self._tupleize(end)
     self._size = self._tupleize(size)
+
     if len(self.start) != len(self.end) or len(self.end) != len(self.start):
       raise ValueError(
           'BoundingBox.start and BoundingBox.end must be the same length. '
@@ -131,48 +123,31 @@ class BoundingBoxBase(Generic[T]):
 
     return True
 
-  def _tupleize(self: S, array: Sequence[float]) -> Tuple[T, ...]:
+  def _tupleize(self: S, seq: Sequence[float]) -> Tuple[T, ...]:
     raise NotImplementedError()
 
-  def _as_ndarray(self: S, array: Sequence[float]) -> np.ndarray:
+  def _as_ndarray(self: S, seq: Sequence[float]) -> np.ndarray:
     raise NotImplementedError()
+
+  def _as_immutablearray(self: S,
+                         seq: Sequence[float]) -> array.ImmutableArray:
+    return array.ImmutableArray(self._as_ndarray(seq))
 
   @property
   def rank(self: S) -> int:
     return len(self.start)
 
   @property
-  def start(self: S) -> np.ndarray:
-    return self._as_ndarray(self._start)
-
-  @start.setter
-  def start(self: S, start: FloatSequence):
-    if len(start) != self.rank:
-      raise ValueError('start length must match rank')
-    self._start = self._tupleize(start)
-    self._size = self._tupleize(self.end - self.start)
+  def start(self: S) -> array.ImmutableArray:
+    return self._as_immutablearray(self._start)
 
   @property
-  def end(self: S) -> np.ndarray:
-    return self._as_ndarray(self._end)
-
-  @end.setter
-  def end(self: S, end: FloatSequence):
-    if len(end) != self.rank:
-      raise ValueError('end length must match rank')
-    self._end = self._tupleize(end)
-    self._size = self._tupleize(self.end - self.start)
+  def end(self: S) -> array.ImmutableArray:
+    return self._as_immutablearray(self.start + self.size)
 
   @property
-  def size(self: S) -> np.ndarray:
-    return self._as_ndarray(self._size)
-
-  @size.setter
-  def size(self: S, size: FloatSequence):
-    if len(size) != self.rank:
-      raise ValueError('size length must match rank')
-    self._size = self._tupleize(size)
-    self._end = self._tupleize(self.start + size)
+  def size(self: S) -> array.ImmutableArray:
+    return self._as_immutablearray(self._size)
 
   def scale(self: S, scale_factor: FloatSequence) -> S:
     """Returns a new BoundingBox, scaled relative to this one.
@@ -189,7 +164,7 @@ class BoundingBoxBase(Generic[T]):
       is computed by floor-division, but the size is computed by
       ceiling-division.
     """
-    if _is_sequence(scale_factor):
+    if array.is_arraylike(scale_factor):
       if len(scale_factor) != self.rank:
         raise ValueError('scale_factor length must match rank')
       scale_factor = np.array(scale_factor, dtype=float)
@@ -218,14 +193,14 @@ class BoundingBoxBase(Generic[T]):
     if start is None:
       start = self.start
     else:
-      if _is_sequence(start) and len(start) != self.rank:
+      if array.is_arraylike(start) and len(start) != self.rank:
         raise ValueError('start length must match rank')
       start = self.start + start
 
     if end is None:
       end = self.end
     else:
-      if _is_sequence(end) and len(end) != self.rank:
+      if array.is_arraylike(end) and len(end) != self.rank:
         raise ValueError('end length must match rank')
       end = self.end + end
     return self.__class__(start=start, end=end)
@@ -239,7 +214,7 @@ class BoundingBoxBase(Generic[T]):
     Returns:
       A new bounding box shifted by the specified vector.
     """
-    if _is_sequence(offset) and len(offset) != self.rank:
+    if array.is_arraylike(offset) and len(offset) != self.rank:
       raise ValueError('offset length must match rank')
     start = self.start + offset
     return self.__class__(start=start, size=self.size)
@@ -398,23 +373,27 @@ class BoundingBoxBase(Generic[T]):
       end = np.maximum(end, box.end)
     return self.__class__(start=start, end=end)
 
+  def __repr__(self):
+    return (f'BoundingBox(start={self.start.tolist()}, '
+            f'end={self.end.tolist()}, size={self.size.tolist()})')
+
 
 class BoundingBox(BoundingBoxBase[int]):
 
-  def _tupleize(self, array: Sequence[float]) -> Tuple[int, ...]:
-    return tuple(np.array(array, dtype=int))
+  def _tupleize(self, seq: Sequence[float]) -> Tuple[int, ...]:
+    return tuple(np.array(seq, dtype=int))
 
-  def _as_ndarray(self, array: Sequence[float]) -> np.ndarray:
-    return np.array(array, dtype=int)
+  def _as_ndarray(self, seq: Sequence[float]) -> np.ndarray:
+    return np.array(seq, dtype=int)
 
 
 class FloatBoundingBox(BoundingBoxBase[float]):
 
-  def _tupleize(self, array: Sequence[float]) -> Tuple[float, ...]:
-    return tuple(np.array(array, dtype=float))
+  def _tupleize(self, seq: Sequence[float]) -> Tuple[float, ...]:
+    return tuple(np.array(seq, dtype=float))
 
-  def _as_ndarray(self, array: Sequence[float]) -> np.ndarray:
-    return np.array(array, dtype=float)
+  def _as_ndarray(self, seq: Sequence[float]) -> np.ndarray:
+    return np.array(seq, dtype=float)
 
 
 def intersections(
