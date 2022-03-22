@@ -17,7 +17,7 @@ import numpy.typing as npt
 T = TypeVar('T', int, float)
 
 
-# TODO(blakely): Make these typed by using Generic[T]
+# TODO(timblakely): Make these typed by using Generic[T]
 class ImmutableArray(array_mixins.ImmutableArrayMixin, np.ndarray):
   """Strongly typed, immutable NumPy NDArray."""
 

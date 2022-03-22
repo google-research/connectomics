@@ -3,3 +3,4 @@ package
 __pycache__/
 *.py[cod]
 .github
+dist

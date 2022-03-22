@@ -38,7 +38,7 @@ class BoundingBoxBase(Generic[T]):
       start: Optional[FloatSequence] = None,
       size: Optional[FloatSequence] = None,
       end: Optional[FloatSequence] = None,
-      # TODO(blakely): Move these parameters into the limited upstream
+      # TODO(timblakely): Move these parameters into the limited upstream
       # usage, as it's not exaclty specific to BoundingBox
       is_border_start: Optional[BoolSequence] = None,
       is_border_end: Optional[BoolSequence] = None):
@@ -429,30 +429,22 @@ def intersections(
   return ret
 
 
-def containing(*boxes: Union[S, Iterable[S]]) -> S:
+def containing(*boxes: S) -> S:
   """Get the minimum bounding box containing all specified boxes.
 
   Args:
-    *boxes: A sequence of BoundingBox or iterable of BoundingBoxes.
+    *boxes: BoundingBoxes to contain.
 
   Returns:
     The minimum bounding box that contains all boxes.
 
   Raises:
-    ValueError: if invalid arguments are specified.
+    ValueError: if input is empty.
   """
 
   if not boxes:
     raise ValueError('At least one bounding box must be specified')
-
-  flattened_boxes = []
-  for box_or_list in boxes:
-    if isinstance(box_or_list, BoundingBoxBase):
-      flattened_boxes.append(box_or_list)
-    else:
-      flattened_boxes.extend(box_or_list)
-
-  box = flattened_boxes[0]
+  box = boxes[0]
   if len(boxes) == 1:
     return box
-  return box.encompass(*flattened_boxes[1:])
+  return box.encompass(*boxes[1:])

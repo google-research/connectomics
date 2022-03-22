@@ -229,13 +229,6 @@ class BoundingBoxTest(absltest.TestCase):
         Box(start=[0, 1, 2], end=[13, 14, 15]),
         box0.encompass(box1, box2, box3))
 
-  def test_containing(self):
-    box0 = Box(start=[0, 1, 2], end=[3, 3, 3])
-    self.assertEqual(box0, box0.encompass(box0))
-    box1 = Box(start=[1, 1, 0], end=[4, 3, 2])
-    box3 = Box(start=[0, 1, 0], end=[4, 3, 3])
-    self.assertEqual(box3, bounding_box.containing(box0, box1))
-
   def test_to_slice(self):
     start = [0, 1, 2, 3, 4]
     end = [5, 6, 7, 8, 9]
@@ -331,6 +324,9 @@ class GlobalTest(absltest.TestCase):
     ], bounding_box.intersections([box0, box1], [box2]))
 
   def test_containing(self):
+    with self.assertRaises(ValueError):
+      bounding_box.containing()
+
     box0 = Box(start=[0, 1, 2], end=[10, 10, 10])
     box1 = Box(start=[1, 2, 3], end=[5, 5, 5])
     box2 = Box(start=[3, 2, 3], end=[15, 16, 17])
@@ -342,16 +338,8 @@ class GlobalTest(absltest.TestCase):
         bounding_box.containing(box0, box1, box2, box3))
 
     self.assertEqual(
-        Box(start=[0, 1, 2], end=[16, 17, 18]),
-        bounding_box.containing([box0, box1], box2, box3))
-
-    self.assertEqual(
         Box(start=[0, 1, 2], end=[17, 18, 19]),
-        bounding_box.containing([box0, box1], box2, box3, box4))
-
-    self.assertEqual(
-        Box(start=[0, 1, 2], end=[17, 18, 19]),
-        bounding_box.containing([box0, box1], box2, [box3, box4]))
+        bounding_box.containing(box0, box1, box2, box3, box4))
 
 
 if __name__ == '__main__':

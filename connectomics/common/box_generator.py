@@ -29,7 +29,29 @@ IndexedBoundingBox = Tuple[BoxIndexCoordinates, bounding_box.BoundingBoxBase]
 BoxIndex = TypeVar('BoxIndex', bound=int)
 
 
-class BoxGenerator:
+class BoxGeneratorBase:
+  """Base class for BoundingBox generators."""
+
+  @property
+  def num_boxes(self) -> int:
+    raise NotImplementedError()
+
+  @property
+  def box_size(self) -> array.ImmutableArray:
+    raise NotImplementedError()
+
+  @property
+  def box_overlap(self) -> array.ImmutableArray:
+    raise NotImplementedError()
+
+  def generate(self, index: int) -> IndexedBoundingBox:
+    raise NotImplementedError()
+
+  def index_to_cropped_box(self, intindex: int) -> bounding_box.BoundingBox:
+    raise NotImplementedError()
+
+
+class BoxGenerator(BoxGeneratorBase):
   """Generates overlapping sub-boxes spanning the input bounding box."""
 
   def __init__(self,
@@ -179,7 +201,7 @@ class BoxGenerator:
       start = np.maximum(self._outer_box.start, end - self._box_size)
     return coords, self.outer_box.__class__(start=start, end=end)
 
-  # TODO(blakely): replace usage cases where callers subsequently call
+  # TODO(timblakely): replace usage cases where callers subsequently call
   # np.unravel
   def generate(self, index: BoxIndex) -> IndexedBoundingBox:
     """Generate the mapping for a provided index.
@@ -384,7 +406,7 @@ GeneratorIndex = TypeVar('GeneratorIndex', bound=int)
 MultiBoxIndex = TypeVar('MultiBoxIndex', bound=int)
 
 
-class MultiBoxGenerator:
+class MultiBoxGenerator(BoxGeneratorBase):
   """Wrapper around multiple BoxGenerators.
 
   Supports generating sub-boxes from multiple outer_boxes with a single linear
@@ -427,9 +449,7 @@ class MultiBoxGenerator:
     index = multi_box_index - self.prefix_sums[generator_index]
     return generator_index, index
 
-  # TODO(blakely): Convert these to the `.generate()` api
-  def index_to_box(self,
-                   multi_box_index: MultiBoxIndex) -> bounding_box.BoundingBox:
+  def generate(self, multi_box_index: MultiBoxIndex) -> IndexedBoundingBox:
     """Translates linear index to sub box.
 
     Outer boxes addressed in order.
@@ -438,10 +458,11 @@ class MultiBoxGenerator:
       multi_box_index: Index to retrieve, relative to the MultiBoxGenerator.
 
     Returns:
-      The box at the given index.
+      Tuple containing a per-dimension index tuple (e.g. XYZ) and the box at the
+      given index.
     """
     generator_index, index = self.index_to_generator_index(multi_box_index)
-    return self.generators[generator_index].generate(index)[1]
+    return self.generators[generator_index].generate(index)
 
   def index_to_cropped_box(
       self, multi_box_index: MultiBoxIndex) -> bounding_box.BoundingBox:

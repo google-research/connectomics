@@ -327,9 +327,9 @@ class MultiBoxGeneratorTest(absltest.TestCase):
     self.assertEqual(multi_generator.index_to_generator_index(14), (1, 6))
     self.assertRaises(ValueError, multi_generator.index_to_generator_index, 16)
 
-    self.assertEqual([multi_generator.index_to_box(i) for i in range(8)],
+    self.assertEqual([multi_generator.generate(i)[1] for i in range(8)],
                      list(multi_generator.generators[0].boxes))
-    self.assertEqual([multi_generator.index_to_box(i) for i in range(8, 16)],
+    self.assertEqual([multi_generator.generate(i)[1] for i in range(8, 16)],
                      list(multi_generator.generators[1].boxes))
 
 
