@@ -8,7 +8,6 @@ from connectomics.common import array
 from connectomics.common import bounding_box
 import numpy as np
 
-
 SuggestedXyz = collections.namedtuple('SuggestedXyz', 'x y z')
 XyzTuple = array.Tuple3i
 TupleOrSuggestedXyz = Union[XyzTuple, SuggestedXyz]  # pylint: disable=invalid-name
@@ -44,7 +43,7 @@ class SubvolumeProcessor:
   # only uses the type and geometry of the array for further processing.
   ignores_input_data = False
 
-  def output_type(self, input_type):
+  def output_type(self, input_type: Union[np.uint8, np.uint64, np.float32]):
     """Returns Numpy output type of self.process for given input_type.
 
     Args:
@@ -116,7 +115,9 @@ class SubvolumeProcessor:
       return SuggestedXyz(*overlap)
     return overlap
 
-  def set_effective_subvol_and_overlap(self, subvol_size, overlap):
+  def set_effective_subvol_and_overlap(self, subvol_size: array.ArrayLike3d,
+                                       overlap: array.ArrayLike3d):
+    """Assign the effective subvolume and overlap."""
     self._subvol_size = array.ImmutableArray(subvol_size)
     self._overlap = array.ImmutableArray(overlap)
     if np.all(self.overlap() == self._overlap):
@@ -153,6 +154,7 @@ class SubvolumeProcessor:
 
   def crop_box_and_data(
       self, box: bounding_box.BoundingBoxBase,
+      # TODO(timblakely): Strongly type this as ArrayCZYX
       data: np.ndarray) -> Tuple[bounding_box.BoundingBoxBase, np.ndarray]:
     """Crop data front/back by self.context.
 
