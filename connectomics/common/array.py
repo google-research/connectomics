@@ -94,5 +94,6 @@ def _to_np_compatible(array_like) -> np.ndarray:
 ArrayLike = Union[npt.ArrayLike, ImmutableArray, MutableArray]
 Tuple3f = Tuple[float, float, float]
 Tuple3i = Tuple[int, int, int]
+Tuple4i = Tuple[int, int, int, int]
 ArrayLike3d = Union[npt.ArrayLike, ImmutableArray, MutableArray, Tuple3f,
                     Tuple3i]
