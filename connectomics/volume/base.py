@@ -2,7 +2,7 @@
 
 import dataclasses
 import functools
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from connectomics.common import array
 from connectomics.common import bounding_box
@@ -59,7 +59,7 @@ class BaseVolume:
 
   @property
   def bounding_boxes(self) -> List[bounding_box.BoundingBox]:
-    return []
+    raise NotImplementedError
 
   # TODO(timblakely): determine what other attributes we want to make mandatory for
   # all implementations and add them here.

@@ -240,5 +240,35 @@ class MutableArrayTest(absltest.TestCase):
     self.assertFalse(np.may_share_memory(out, a))
 
 
+class TestNormalizeIndex(absltest.TestCase):
+
+  def test_normalize_index(self):
+    limits = (1, 12, 11, 10)
+    self.assertEqual((
+        slice(0, 1),
+        slice(3, 4),
+        slice(2, 3),
+        slice(1, 2),
+    ), array.normalize_index((0, 3, 2, 1), limits))
+
+    self.assertEqual((
+        slice(0, 1),
+        slice(7, 12, 1),
+        slice(6, 2, 1),
+        slice(1, 2),
+    ), array.normalize_index(np.s_[0, 7:, 6:2, 1], limits))
+
+  def test_point_lookup(self):
+    points = (
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+    )
+
+    limits = (1, 12, 11, 10)
+    index_exp = (0,) + points
+    self.assertEqual(index_exp, array.normalize_index(index_exp, limits))
+
+
 if __name__ == '__main__':
   absltest.main()
