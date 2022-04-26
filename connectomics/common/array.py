@@ -24,6 +24,8 @@ PointLookup4d = Tuple[ArbitrarySlice, PointLookup, PointLookup, PointLookup]
 ArbitrarySlice4d = Tuple[ArbitrarySlice, ArbitrarySlice, ArbitrarySlice,
                          ArbitrarySlice]
 CanonicalSlice4d = Tuple[slice, slice, slice, slice]
+IndexExpOrPointLookup4d = Union[ArbitrarySlice4d, PointLookup4d]
+CanonicalSliceOrPointLookup4d = Union[CanonicalSlice4d, PointLookup4d]
 
 ArrayLike = Union[npt.ArrayLike, 'ImmutableArray', 'MutableArray']
 Tuple3f = Tuple[float, float, float]
@@ -33,8 +35,8 @@ ArrayLike3d = Union[npt.ArrayLike, 'ImmutableArray', 'MutableArray', Tuple3f,
                     Tuple3i]
 
 
-def normalize_index(ind: Union[ArbitrarySlice4d, PointLookup4d],
-                    limits: Tuple4i) -> Union[CanonicalSlice4d, PointLookup4d]:
+def normalize_index(ind: IndexExpOrPointLookup4d,
+                    limits: Tuple4i) -> CanonicalSliceOrPointLookup4d:
   """Converts a volume indexing expression into the canonical form.
 
   If the index expression is a point lookup, it is returned unchanged.
