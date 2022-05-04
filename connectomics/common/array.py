@@ -18,14 +18,14 @@ import numpy.typing as npt
 T = TypeVar('T', int, float)
 
 # TODO(timblakely): Support Ellipses
-ArbitrarySlice = Union[int, slice]
-PointLookup = Union[np.ndarray, list[int]]
-PointLookup4d = Tuple[ArbitrarySlice, PointLookup, PointLookup, PointLookup]
-ArbitrarySlice4d = Tuple[ArbitrarySlice, ArbitrarySlice, ArbitrarySlice,
-                         ArbitrarySlice]
-CanonicalSlice4d = Tuple[slice, slice, slice, slice]
-IndexExpOrPointLookup4d = Union[ArbitrarySlice4d, PointLookup4d]
-CanonicalSliceOrPointLookup4d = Union[CanonicalSlice4d, PointLookup4d]
+CoordinateLookup = Union[np.ndarray, list[int], tuple[int, ...]]
+PointLookups = Tuple[Union[int, slice], CoordinateLookup, CoordinateLookup,
+                     CoordinateLookup]
+ArbitrarySlice = Tuple[Union[int, slice], Union[int, slice], Union[int, slice],
+                       Union[int, slice]]
+CanonicalSlice = Tuple[slice, slice, slice, slice]
+IndexExpOrPointLookups = Union[ArbitrarySlice, PointLookups]
+CanonicalSliceOrPointLookups = Union[CanonicalSlice, PointLookups]
 
 ArrayLike = Union[npt.ArrayLike, 'ImmutableArray', 'MutableArray']
 Tuple3f = Tuple[float, float, float]
@@ -35,8 +35,14 @@ ArrayLike3d = Union[npt.ArrayLike, 'ImmutableArray', 'MutableArray', Tuple3f,
                     Tuple3i]
 
 
-def normalize_index(ind: IndexExpOrPointLookup4d,
-                    limits: Tuple4i) -> CanonicalSliceOrPointLookup4d:
+def is_point_lookup(ind: IndexExpOrPointLookups) -> bool:
+  return len(ind) == 4 and all(
+      (isinstance(x, np.ndarray) or isinstance(x, list) or isinstance(x, tuple))
+      for x in ind[1:])
+
+
+def normalize_index(ind: IndexExpOrPointLookups,
+                    limits: Tuple4i) -> CanonicalSliceOrPointLookups:
   """Converts a volume indexing expression into the canonical form.
 
   If the index expression is a point lookup, it is returned unchanged.
@@ -46,16 +52,16 @@ def normalize_index(ind: IndexExpOrPointLookup4d,
     limits: maximum limits in the event of open-ended index expression.
 
   Returns:
-    4-sequence of slice objects for indexing subvolumes
+    Sequence of slice objects for indexing subvolumes, up to 4d.
 
   Raises:
     ValueError: when an unsupported indexing expression is passed
   """
-  if not isinstance(ind, abc.Sized) or len(ind) != 4:
-    raise ValueError('Only 4D slices are currently supported. '
-                     f'Ellipses are unsupported. {ind} unsupported.')
+  if not isinstance(ind, abc.Sized) or len(ind) > 4:
+    raise ValueError(f'Slices must be <= 4D. Ellipses are unsupported. '
+                     f'{ind} unsupported.')
 
-  if all((isinstance(x, np.ndarray) or isinstance(x, list)) for x in ind[1:]):
+  if is_point_lookup(ind):
     # Cast away the type here to make pytype happy. We've checked in the
     # conditional above that all the values for ind[1:] are either an ndarray or
     # a list.
@@ -66,7 +72,7 @@ def normalize_index(ind: IndexExpOrPointLookup4d,
   return tuple(ind)
 
 
-def process_slice_ind(slice_ind: ArbitrarySlice, limit: int):
+def process_slice_ind(slice_ind: ArbitrarySlice, limit: int) -> slice:
   """Converts a single slice index to canonical slice form.
 
   Does not have built-in support for striding. Note that if an underlying

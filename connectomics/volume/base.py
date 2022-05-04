@@ -2,6 +2,7 @@
 
 import dataclasses
 import functools
+import typing
 from typing import Any, Dict, List, Optional
 
 from connectomics.common import array
@@ -34,7 +35,21 @@ class VolumeDescriptor:
 class BaseVolume:
   """Common interface to multiple volume backends for Decorators."""
 
-  def __getitem__(self, ind):
+  def __getitem__(self, ind: array.IndexExpOrPointLookups) -> np.ndarray:
+    ind = array.normalize_index(ind, self.shape)
+
+    if array.is_point_lookup(ind):
+      # Hack to make pytype happy. We've taken care of checking for the
+      # point-lookup path in the above conditional
+      ind = typing.cast(array.PointLookups, ind)
+      return self.get_points(ind)
+    return self.get_slices(ind)
+
+  # TODO(timblakely): Remove any usage of this with Vector3j.
+  def get_points(self, points: array.PointLookups) -> np.ndarray:
+    raise NotImplementedError
+
+  def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
     raise NotImplementedError
 
   @property
