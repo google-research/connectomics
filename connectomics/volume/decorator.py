@@ -1,11 +1,65 @@
 """Volume decorators for modifying volumes on-the-fly."""
 
-from typing import Sequence, Union
+from typing import Any, Optional
 
 from connectomics.common import array
 from connectomics.common import bounding_box
 from connectomics.volume import base
 import numpy as np
+
+
+class DecoratorFactory:
+  """Constructs a VolumeDecorator based on a name and arguments."""
+
+  def make_decorator(self, wrapped_volume: base.BaseVolume, name: str,
+                     *args: list[Any],
+                     **kwargs: dict[str, Any]) -> 'VolumeDecorator':
+    raise NotImplementedError()
+
+
+class GlobalsDecoratorFactory:
+  """Loads VolumeDecorators from globals()."""
+
+  def make_decorator(self, wrapped_volume: base.BaseVolume, name: str,
+                     *args: list[Any],
+                     **kwargs: dict[str, Any]) -> 'VolumeDecorator':
+    decorator_ctor = globals()[name]
+    return decorator_ctor(wrapped_volume, *args, **kwargs)
+
+
+def from_specs(volume: base.BaseVolume,
+               specs: list[base.DecoratorSpec],
+               decorator_factory: Optional[DecoratorFactory] = None):
+  """Decorates the given volume from the given specs.
+
+  Args:
+    volume: Base volume to wrap.
+    specs: Sequence of decoration specs, described below.
+    decorator_factory: Optional. Defaults to loading decorators from this file
+      (`globals()`). If decorators need to be loaded from other modules,
+      subclass DecoratorFactory and do path manipulation there.
+
+  Returns:
+    Decorated volume.  (Can return original volume if specs is empty.)
+
+  A spec is a dict having fields:
+    decorator: StrDecoratorClassName
+    args: [sequence, of, decorator, args]
+    kwargs: {dict_of: decorator_args}
+
+  The spec sequence will be used to chain a sequence of decorators onto given
+  volume, in left to right order.
+  """
+
+  if decorator_factory is None:
+    decorator_factory = GlobalsDecoratorFactory()
+
+  for s in specs:
+    args = s.get('args', [])
+    kwargs = s.get('kwargs', {})
+    volume = decorator_factory.make_decorator(volume, s['decorator'], args,
+                                              **kwargs)
+  return volume
 
 
 class VolumeDecorator(base.BaseVolume):
@@ -16,16 +70,18 @@ class VolumeDecorator(base.BaseVolume):
   def __init__(self, wrapped: base.BaseVolume):
     self._wrapped = wrapped
 
-  def __getitem__(self, ind):
-    """Delegate to wrapped BaseVolume by default."""
-    return self._wrapped[ind]
+  def get_points(self, points: array.PointLookups) -> np.ndarray:
+    return self._wrapped.get_points(points)
+
+  def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
+    return self._wrapped.get_slices(slices)
 
   @property
   def volume_size(self) -> array.Tuple3i:
     return self._wrapped.volume_size
 
   @property
-  def voxel_size(self) -> array.Tuple3i:
+  def voxel_size(self) -> array.Tuple3f:
     return self._wrapped.voxel_size
 
   @property
@@ -45,39 +101,73 @@ class VolumeDecorator(base.BaseVolume):
     return self._wrapped.bounding_boxes
 
 
-class ScaleChannels(VolumeDecorator):
-  """Scales channel values by given factors."""
+# TODO(timblakely): Replace internal Upsample decorator with this one.
+class Upsample(VolumeDecorator):
+  """Dynamically upsamples data with nearest neighbors.
 
-  def __init__(self, factors: Sequence[Union[int, float]],
-               wrapped: base.BaseVolume):
-    """Initialize the wrapper with per-channel scale factors.
+  The wrapper behaves as a higher resolution volume.
+  """
+
+  scale_zyx: np.ndarray
+
+  def __init__(self, wrapped: base.BaseVolume, scale: array.ArrayLike3d):
+    """Initializes the wrapper.
 
     Args:
-      factors: Sequence with len equal to num_channels giving the scale factors
-        by which to multiply each data channel.
-      wrapped: Wrapped volume to apply scaling to.
+      wrapped: Lower resolution volume.
+      scale: Integer scale factors as (x, y, z)
 
     Raises:
-      ValueError: If len(factors) != num_channels.
+      ValueError: If scale is not 3d.
     """
-    super(ScaleChannels, self).__init__(wrapped)
-    if len(factors) != self._wrapped.shape[0]:
-      raise ValueError('len(factors) must equal number of channels (shape[0]): '
-                       f'{factors} vs. {self._wrapped.shape[0]}')
+    super().__init__(wrapped)
+    if len(scale) != 3:
+      raise ValueError('Expected a 3d scale in XYZ format')
+    self.scale_zyx = np.array(scale[::-1])
 
-    # Make 4d so easy to broadcast.
-    self.factors = np.reshape(factors, (self._wrapped.shape[0], 1, 1, 1))
+  @property
+  def volume_size(self) -> array.Tuple3i:
+    return self.scale_zyx[::-1] * self._wrapped.volume_size
 
-  def __getitem__(self, slc):
-    if len(slc) == 3:
-      # Special case for VolumeStore meaning all channels.  This is different
-      # from Numpy behavior.
-      factors = self.factors
-    else:
-      factors = self.factors[slc[0], ...]
-      if factors.ndim == 3:
-        # If slc[0] was a single channel index, and got auto-squeezed, put it
-        # back.
-        factors.shape = 1, 1, 1, 1
-    data = self._wrapped[slc]
-    return (data * factors).astype(data.dtype)
+  @property
+  def voxel_size(self) -> array.Tuple3i:
+    return tuple(self._wrapped.voxel_size / self.scale_zyx[::-1])
+
+  @property
+  def shape(self) -> array.Tuple4i:
+    return np.insert(self.scale_zyx, 0, 1) * self._wrapped.shape
+
+  @property
+  def bounding_boxes(self) -> list[bounding_box.BoundingBox]:
+    return [b.scale(self.scale_zyx[::-1]) for b in self._wrapped.bounding_boxes]
+
+  def get_points(self, points: array.PointLookups) -> np.ndarray:
+    scaled_points = list(points)
+    for i in range(1, 4):
+      scaled_points[i] = np.array(scaled_points[i]) // self.scale_zyx[i - 1]
+    return self._wrapped.get_points(tuple(scaled_points))
+
+  def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
+    ceildiv = lambda x, y: -(-x // y)
+
+    scaled_slice = list(slices)
+    for i in range(1, 4):
+      begin = slices[i].start // self.scale_zyx[i - 1]
+      end = ceildiv(slices[i].stop, self.scale_zyx[i - 1])
+      scaled_slice[i] = np.s_[begin:end]
+    low_res = self._wrapped.get_slices(tuple(scaled_slice))
+    # Upsample.
+    upsampled = low_res.repeat(
+        self.scale_zyx[0], axis=1).repeat(
+            self.scale_zyx[1], axis=2).repeat(
+                self.scale_zyx[2], axis=3)
+    del low_res
+    # Restrict to the requested fragment.
+    sel = [slice(None)]
+    for i in range(1, 4):
+      actual_start = (
+          slices[i].start - scaled_slice[i].start * self.scale_zyx[i - 1])
+      sel.append(
+          slice(actual_start, actual_start + slices[i].stop - slices[i].start))
+
+    return upsampled[tuple(sel)]
