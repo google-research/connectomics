@@ -14,6 +14,7 @@
 # limitations under the License.
 """Tests for connectomics.common.BoundingBox."""
 
+import json
 from absl.testing import absltest
 from connectomics.common import bounding_box
 import numpy as np
@@ -340,6 +341,21 @@ class GlobalTest(absltest.TestCase):
     self.assertEqual(
         Box(start=[0, 1, 2], end=[17, 18, 19]),
         bounding_box.containing(box0, box1, box2, box3, box4))
+
+  def test_serializing(self):
+    box = Box(start=[0, 1, 2], end=[10, 10, 10])
+    expected_json = {
+        'type': 'BoundingBox',
+        'start': [0, 1, 2],
+        'size': [10, 9, 8],
+        'is_border_start': [False, False, False],
+        'is_border_end': [False, False, False]
+    }
+    self.assertIn('\n', box.serialize())
+    self.assertNotIn('\n', box.serialize(compact=False))
+
+    self.assertEqual(expected_json, json.loads(box.serialize()))
+    self.assertEqual(box, bounding_box.deserialize(box.serialize()))
 
 
 if __name__ == '__main__':

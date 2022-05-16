@@ -15,9 +15,11 @@
 """Defines the BoundingBox dataclass to describe bounding boxes."""
 
 import dataclasses
-from typing import Optional, Sequence, Tuple, Union, TypeVar, Generic, Iterable, List
-from connectomics.common import array
+import json
+from typing import Any, Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
 
+from absl import logging
+from connectomics.common import array
 import numpy as np
 
 T = TypeVar('T', int, float)
@@ -129,8 +131,7 @@ class BoundingBoxBase(Generic[T]):
   def _as_ndarray(self: S, seq: Sequence[float]) -> np.ndarray:
     raise NotImplementedError()
 
-  def _as_immutablearray(self: S,
-                         seq: Sequence[float]) -> array.ImmutableArray:
+  def _as_immutablearray(self: S, seq: Sequence[float]) -> array.ImmutableArray:
     return array.ImmutableArray(self._as_ndarray(seq))
 
   @property
@@ -377,6 +378,56 @@ class BoundingBoxBase(Generic[T]):
     return (f'BoundingBox(start={self.start.tolist()}, '
             f'end={self.end.tolist()}, size={self.size.tolist()})')
 
+  @property
+  def spec(self) -> dict[str, Any]:
+    spec = self._spec
+    spec['type'] = self.__class__.__name__
+    return spec
+
+  @property
+  def _spec(self) -> dict[str, Any]:
+    spec = {
+        'start': self.start.tolist(),
+        'size': self.size.tolist(),
+        'is_border_start': self.is_border_start.tolist(),
+        'is_border_end': self.is_border_end.tolist(),
+    }
+    return spec
+
+  @staticmethod
+  def from_spec(spec: dict[str, Any]) -> 'BoundingBoxBase':
+    """Create a new instance from a spec.
+
+    If the 'type' field is not set on the spec, the bounding box is assumed to
+    be a BoundingBox instance (integer-based).
+
+    Args:
+      spec: Dictionary of values that define a bounding box. Refer to the
+        respective implementations for required fields.
+
+    Returns:
+      A new bounding box.
+
+    Raises:
+      ValueError: If the type is unknown.
+    """
+    if 'type' in spec:
+      bbox_type = spec['type']
+      del spec['type']
+      if bbox_type not in globals():
+        raise ValueError(f'Unknown bounding box type: {bbox_type}')
+      bbox_ctor = globals()[bbox_type]
+    else:
+      logging.log_first_n(
+          logging.WARNING,
+          'Bounding box type not set, assuming integer BoundingBox',
+          100)
+      bbox_ctor = BoundingBox
+    return bbox_ctor(**spec)
+
+  def serialize(self, compact: bool = True) -> str:
+    return serialize(self, compact=compact)
+
 
 class BoundingBox(BoundingBoxBase[int]):
 
@@ -448,3 +499,23 @@ def containing(*boxes: S) -> S:
   if len(boxes) == 1:
     return box
   return box.encompass(*boxes[1:])
+
+
+def serialize(box: BoundingBoxBase, compact: bool = True) -> str:
+  """Serialize a bounding box to JSON.
+
+  Args:
+    box: Target to serialize.
+    compact: Whether the returned JSON should be human readable or compacted
+      onto a single line.
+
+  Returns:
+    Serialized bounding box as string.
+  """
+  return json.dumps(box.spec, indent=2 if compact else None)
+
+
+def deserialize(serialized: Union[str, dict[str, Any]]) -> BoundingBoxBase:
+  as_dict = serialized if isinstance(serialized,
+                                     dict) else json.loads(serialized)
+  return BoundingBoxBase.from_spec(as_dict)

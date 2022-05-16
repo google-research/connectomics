@@ -17,8 +17,10 @@
 import bisect
 import functools
 import itertools
-from typing import List, Optional, Sequence, Tuple, Iterable, TypeVar, Union
+import json
+from typing import Any, List, Optional, Sequence, Tuple, Iterable, TypeVar, Union
 
+from absl import logging
 from connectomics.common import array
 from connectomics.common import bounding_box
 import numpy as np
@@ -49,6 +51,75 @@ class BoxGeneratorBase:
 
   def index_to_cropped_box(self, intindex: int) -> bounding_box.BoundingBox:
     raise NotImplementedError()
+
+  @property
+  def spec(self) -> dict[str, Any]:
+    """Returns the values required to serialize the generator."""
+    spec = self._spec
+    spec['type'] = self.__class__.__name__
+    return spec
+
+  @property
+  def _spec(self) -> dict[str, Any]:
+    """Implementation-specific generator specs."""
+    raise NotImplementedError()
+
+  @staticmethod
+  def from_spec(spec: dict[str, Any]) -> 'BoxGeneratorBase':
+    """Create a new instance from a spec.
+
+    Args:
+      spec: Dictionary of values that define a box generator. Refer to the
+        respective implementations for required fields.
+
+    Returns:
+      A new instance of the generator.
+
+    Raises:
+      ValueError: If the type is unknown, or if the correct type cannot be
+        guessed based on the spec if the 'type' field is missing.
+    """
+
+    if 'type' in spec:
+      generator_type = spec['type']
+      del spec['type']
+      if generator_type not in globals():
+        raise ValueError(f'Unknown box generator type: {generator_type}')
+      generator_class = globals()[generator_type]
+    else:
+      if 'outer_boxes' in spec:
+        generator_class = MultiBoxGenerator
+      elif 'outer_box' in spec:
+        generator_class = BoxGenerator
+      else:
+        raise ValueError(
+            'Cannot infer generator type from spec. Please specify \'type\' '
+            'explicitly in spec')
+      logging.warning(
+          'Type not specified in BoxGeneratorBase, attempting to guess based '
+          'on spec. Assuming: %s', generator_class.__name__)
+    return generator_class._from_spec(spec)  # pylint: disable=protected-access
+
+  @staticmethod
+  def _from_spec(spec: dict[str, Any]) -> 'BoxGeneratorBase':
+    raise NotImplementedError()
+
+  def serialize(self, compact: bool = True) -> str:
+    return serialize(self, compact=compact)
+
+  def __eq__(self: 'BoxGeneratorBase', other: 'BoxGeneratorBase') -> bool:
+    for k, v in self.__dict__.items():
+      if k not in other.__dict__:
+        return False
+
+      if isinstance(v, np.ndarray):
+        if not np.all(v == other.__dict__[k]):
+          return False
+      else:
+        if v != other.__dict__[k]:
+          return False
+
+    return True
 
 
 class BoxGenerator(BoxGeneratorBase):
@@ -91,7 +162,7 @@ class BoxGenerator(BoxGeneratorBase):
 
     box_size = np.array(box_size)
     if outer_box.rank != box_size.size:
-      raise ValueError('box_size incompatible with outer_box rank (%d vs %d).' %
+      raise ValueError('box_size incompatible with outer_box rank (%s vs %s).' %
                        (box_size.size, outer_box.rank))
 
     # normalize overlap
@@ -130,20 +201,6 @@ class BoxGenerator(BoxGeneratorBase):
     items = [f'num_boxes={self.num_boxes}'
             ] + ['%s=%s' % item for item in vars(self).items()]
     return '%s(%s)' % (type(self).__name__, ', '.join(items))
-
-  def __eq__(self: S, other: S) -> bool:
-    for k, v in self.__dict__.items():
-      if k not in other.__dict__:
-        return False
-
-      if isinstance(v, np.ndarray):
-        if not np.all(v == other.__dict__[k]):
-          return False
-      else:
-        if v != other.__dict__[k]:
-          return False
-
-    return True
 
   @property
   def outer_box(self) -> bounding_box.BoundingBoxBase:
@@ -401,6 +458,22 @@ class BoxGenerator(BoxGeneratorBase):
             continue
           yield sub_box
 
+  @property
+  def _spec(self) -> dict[str, Any]:
+    spec = {
+        'outer_box': self._outer_box.spec,
+        'box_size': self.box_size.tolist(),
+        'box_overlap': self.box_overlap.tolist(),
+        'back_shift_small_boxes': self._back_shift_small_boxes,
+    }
+    return spec
+
+  @staticmethod
+  def _from_spec(spec: dict[str, Any]) -> 'BoxGenerator':
+    outer_box = bounding_box.deserialize(spec['outer_box'])
+    return BoxGenerator(outer_box, spec['box_size'], spec['box_overlap'],
+                        spec['back_shift_small_boxes'])
+
 
 GeneratorIndex = TypeVar('GeneratorIndex', bound=int)
 MultiBoxIndex = TypeVar('MultiBoxIndex', bound=int)
@@ -504,3 +577,40 @@ class MultiBoxGenerator(BoxGeneratorBase):
   @property
   def box_overlap(self) -> array.ImmutableArray:
     return self.generators[0].box_overlap
+
+  @property
+  def _spec(self) -> dict[str, Any]:
+    first_gen = self.generators[0]
+    spec = {
+        'outer_boxes': [g.outer_box.spec for g in self.generators],
+        'box_size': first_gen.box_size.tolist(),
+        'box_overlap': first_gen.box_overlap.tolist(),
+        'back_shift_small_boxes': first_gen._back_shift_small_boxes,
+    }
+    return spec
+
+  @staticmethod
+  def _from_spec(spec: dict[str, Any]) -> 'MultiBoxGenerator':
+    outer_boxes = [bounding_box.deserialize(b) for b in spec['outer_boxes']]
+    return MultiBoxGenerator(outer_boxes, spec['box_size'], spec['box_overlap'],
+                             spec['back_shift_small_boxes'])
+
+
+def serialize(generator: BoxGeneratorBase, compact: bool = False) -> str:
+  """Serialize a generator object to JSON.
+
+  Args:
+    generator: Target to serialize.
+    compact: Whether the returned JSON should be human readable or compacted
+      onto a single line.
+
+  Returns:
+    Serialized generator as string.
+  """
+  return json.dumps(generator.spec, indent=2 if compact else None)
+
+
+def deserialize(serialized: Union[str, dict[str, Any]]) -> BoxGeneratorBase:
+  as_dict = serialized if isinstance(serialized,
+                                     dict) else json.loads(serialized)
+  return BoxGeneratorBase.from_spec(as_dict)
