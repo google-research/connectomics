@@ -43,6 +43,7 @@ class VolumeDescriptor:
 class BaseVolume:
   """Common interface to multiple volume backends for Decorators."""
 
+  # TODO(timblakely): Convert to returning Subvolumes.
   def __getitem__(self, ind: array.IndexExpOrPointLookups) -> np.ndarray:
     ind = array.normalize_index(ind, self.shape)
 
@@ -55,9 +56,10 @@ class BaseVolume:
 
   # TODO(timblakely): Remove any usage of this with Vector3j.
   def get_points(self, points: array.PointLookups) -> np.ndarray:
-    """Returns values at points given `channel, list[X], list[Y], list[z].`"""
+    """Returns values at points given `channel, list[X], list[Y], list[Z]`."""
     raise NotImplementedError
 
+  # TODO(timblakely): Convert to returning Subvolumes.
   def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
     """Returns a subvolume of data based on a specified set of CZYX slices."""
     raise NotImplementedError
