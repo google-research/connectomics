@@ -17,7 +17,6 @@
 from typing import Iterable, List, Tuple
 
 import numpy as np
-import scipy.sparse
 
 
 def relabel(labels: np.ndarray, orig_ids: Iterable[int],
@@ -36,19 +35,11 @@ def relabel(labels: np.ndarray, orig_ids: Iterable[int],
   new_ids = np.asarray(new_ids)
   assert orig_ids.size == new_ids.size
 
-  # A sparse matrix is required so that arbitrarily large IDs can be used as
-  # input. The first dimension of the matrix is dummy and has a size of 1 (the
-  # first coordinate is fixed at 0). This is necessary because only 2d sparse
-  # arrays are supported.
-  row_indices = np.zeros_like(orig_ids)
-  col_indices = orig_ids
-
-  relabel_mtx = scipy.sparse.csr_matrix((new_ids, (row_indices, col_indices)),
-                                        shape=(1, int(col_indices.max()) + 1))
-  # Index with a 2D array so that the output is a sparse matrix.
-  labels2d = labels.reshape(1, labels.size)
-  relabeled = relabel_mtx[0, labels2d]
-  return relabeled.toarray().reshape(labels.shape)
+  relabel_hashtable = {
+      new_id: orig_id for new_id, orig_id in zip(orig_ids, new_ids)
+  }
+  relabeled = [relabel_hashtable[l] for l in labels.flatten()]
+  return np.asarray(relabeled).reshape(labels.shape)
 
 
 def make_contiguous(
