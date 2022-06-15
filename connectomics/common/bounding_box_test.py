@@ -351,8 +351,8 @@ class GlobalTest(absltest.TestCase):
         'is_border_start': [False, False, False],
         'is_border_end': [False, False, False]
     }
-    self.assertIn('\n', box.serialize())
-    self.assertNotIn('\n', box.serialize(compact=False))
+    self.assertNotIn('\n', box.serialize())
+    self.assertIn('\n', box.serialize(compact=False))
 
     self.assertEqual(expected_json, json.loads(box.serialize()))
     self.assertEqual(box, bounding_box.deserialize(box.serialize()))

@@ -607,7 +607,7 @@ def serialize(generator: BoxGeneratorBase, compact: bool = False) -> str:
   Returns:
     Serialized generator as string.
   """
-  return json.dumps(generator.spec, indent=2 if compact else None)
+  return json.dumps(generator.spec, indent=2 if not compact else None)
 
 
 def deserialize(serialized: Union[str, dict[str, Any]]) -> BoxGeneratorBase:

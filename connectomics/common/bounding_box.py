@@ -512,7 +512,7 @@ def serialize(box: BoundingBoxBase, compact: bool = True) -> str:
   Returns:
     Serialized bounding box as string.
   """
-  return json.dumps(box.spec, indent=2 if compact else None)
+  return json.dumps(box.spec, indent=2 if not compact else None)
 
 
 def deserialize(serialized: Union[str, dict[str, Any]]) -> BoundingBoxBase:
