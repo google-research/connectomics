@@ -19,6 +19,7 @@ import os
 from absl import flags
 from absl.testing import absltest
 from connectomics.common import bounding_box
+from connectomics.common import file
 from connectomics.volume import tensorstore as tsv
 import numpy as np
 import numpy.testing as npt
@@ -78,7 +79,7 @@ class TensorstoreTest(absltest.TestCase):
     # Test with metadata from file
     tmp_dir = FLAGS.test_tmpdir
     metadata_path = os.path.join(tmp_dir, 'metadata.json')
-    with open(metadata_path, 'w') as f:
+    with file.Open(metadata_path, 'w') as f:
       f.write(metadata.to_json())
     vol = tsv.TensorstoreVolume(spec, metadata_path)
     self.assertEqual((8, 8, 33), vol.voxel_size)

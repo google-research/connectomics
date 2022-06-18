@@ -21,6 +21,7 @@ from typing import Any, Sequence, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.common import file
 from connectomics.volume import base
 import dataclasses_json
 import numpy as np
@@ -68,19 +69,17 @@ class TensorstoreVolume(base.BaseVolume):
       except json.decoder.JSONDecodeError:
         # Try and load it as a file path instead.
         try:
-          # TODO(timblakely): Shim this so we can work with internal file systems.
-          with open(metadata, 'r') as f:
+          with file.GFile(metadata, 'r') as f:
             # TODO(timblakely): Due to
             # https://github.com/lidatong/dataclasses-json/issues/318 we can't
             # use the spec(), which in turn means we can't use dataclass.load or
             # .loads. Instead we just read the contents directly and attempt to
             # parse it as json.
             self._metadata = TensorstoreVolumeMetadata.from_json(f.read())
-        except FileNotFoundError:
+        except file.NotFoundError:
           raise ValueError(
               'Could not parse metadata json, or file does not exist: '
-              f'{metadata}'
-          ) from None
+              f'{metadata}') from None
     else:
       self._metadata = metadata
     self._store = ts.open(tensorstore_spec).result()
@@ -125,10 +124,8 @@ class TensorstoreVolume(base.BaseVolume):
 class TensorstoreArrayVolume(TensorstoreVolume):
   """TensorStore volume using existing, in-memory arrays."""
 
-  def __init__(
-      self,
-      data: np.ndarray,
-      metadata: Union[str, TensorstoreVolumeMetadata]):
+  def __init__(self, data: np.ndarray,
+               metadata: Union[str, TensorstoreVolumeMetadata]):
     super().__init__(
         {
             'driver': 'array',
