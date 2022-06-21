@@ -282,6 +282,11 @@ class BoundingBoxTest(absltest.TestCase):
       expected_4d = none_slice * (4 - dim_size) + expected_slice
       self.assertEqual(expected_4d, box.to_slice4d())
 
+  def test_hashability(self):
+    b = Box(start=[1, 2, 3], size=[4, 5, 6])
+    d = {b: 1}
+    self.assertEqual(d[b], 1)
+
 
 class GlobalTest(absltest.TestCase):
 
