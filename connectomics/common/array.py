@@ -159,6 +159,9 @@ class ImmutableArray(array_mixins.ImmutableArrayMixin, np.ndarray):
   def __str__(self):
     return np.ndarray.__repr__(self)
 
+  def __hash__(self):
+    return hash(self.tobytes())
+
 
 class MutableArray(array_mixins.MutableArrayMixin, ImmutableArray):
   """Strongly typed mutable version of np.ndarray."""

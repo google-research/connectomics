@@ -28,12 +28,13 @@ FloatSequence = Union[float, Sequence[float]]
 BoolSequence = Union[bool, Sequence[bool]]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True, init=False)
 class BoundingBoxBase(Generic[T]):
   """BoundingBox encapsulates start/end coordinate pairs of the same length."""
   _start: Tuple[T, ...]
-  _end: Tuple[T, ...]
   _size: Tuple[T, ...]
+  is_border_start: array.ImmutableArray
+  is_border_end: array.ImmutableArray
 
   def __init__(
       self,
@@ -87,8 +88,8 @@ class BoundingBoxBase(Generic[T]):
     else:
       size = end - start
 
-    self._start = self._tupleize(start)
-    self._size = self._tupleize(size)
+    object.__setattr__(self, '_start', self._tupleize(start))
+    object.__setattr__(self, '_size', self._tupleize(size))
 
     if len(self.start) != len(self.end) or len(self.end) != len(self.start):
       raise ValueError(
@@ -99,17 +100,19 @@ class BoundingBoxBase(Generic[T]):
       if len(is_border_start) != self.rank:
         raise ValueError(
             f'is_border_start needs to have exactly {self.rank} items')
-      self.is_border_start = np.asarray(is_border_start)
+      is_border_start = np.asarray(is_border_start)
     else:
-      self.is_border_start = np.zeros(self.rank, dtype=bool)
+      is_border_start = np.zeros(self.rank, dtype=bool)
+    object.__setattr__(self, 'is_border_start', array.ImmutableArray(is_border_start))
 
     if is_border_end is not None:
       if len(is_border_end) != self.rank:
         raise ValueError(
             f'is_border_end needs to have exactly {self.rank} items')
-      self.is_border_end = np.asarray(is_border_end)
+      is_border_end = np.asarray(is_border_end)
     else:
-      self.is_border_end = np.zeros(self.rank, dtype=bool)
+      is_border_end = np.zeros(self.rank, dtype=bool)
+    object.__setattr__(self, 'is_border_end', array.ImmutableArray(is_border_end))
 
   def __eq__(self: S, other: S) -> bool:
     for k, v in self.__dict__.items():
