@@ -21,7 +21,7 @@ from typing import Any, Callable, TypeVar, Union
 # TODO(timblakely): Remove dependency on TF when there's a common API to read
 # files internally and externally.
 import tensorflow.compat.v2 as tf
-import tensorflow.compat.v2.io.gfile as gfile
+from tensorflow.compat.v2.io import gfile
 
 Copy = gfile.copy
 DeleteRecursively = gfile.rmtree
