@@ -14,12 +14,9 @@
 # limitations under the License.
 """Tests for tensorstore volumes."""
 
-import os
-
 from absl import flags
 from absl.testing import absltest
 from connectomics.common import bounding_box
-from connectomics.common import file
 from connectomics.volume import tensorstore as tsv
 import numpy as np
 import numpy.testing as npt
@@ -39,16 +36,24 @@ def default_data(size):
 class TensorstoreTest(absltest.TestCase):
 
   def test_volume_metadata(self):
-    metadata = tsv.TensorstoreVolumeMetadata(
+    metadata = tsv.TensorstoreMetadata(
         bounding_boxes=[BBox([0, 0, 0], [10, 11, 12])],
         voxel_size=(8, 8, 33),
     )
-    self.assertEqual(
-        metadata, tsv.TensorstoreVolumeMetadata.from_json(metadata.to_json()))
+    as_json = """
+    {
+      "voxel_size": [8,8,33],
+      "bounding_boxes": [{
+        "start": [0,0,0],
+        "size": [10,11,12]
+      }]
+    }
+    """
+    self.assertEqual(metadata, tsv.TensorstoreMetadata.from_json(as_json))
 
   def test_creation(self):
     bbox = BBox([0, 0, 0], [10, 11, 12])
-    metadata = tsv.TensorstoreVolumeMetadata(
+    metadata = tsv.TensorstoreMetadata(
         bounding_boxes=[bbox],
         voxel_size=(8, 8, 33),
     )
@@ -59,46 +64,72 @@ class TensorstoreTest(absltest.TestCase):
         'array': data,
     }
 
-    # Test with metadata object
-    vol = tsv.TensorstoreVolume(spec, metadata)
+    vol = tsv.TensorstoreVolume(tsv.TensorstoreConfig(spec, metadata))
     self.assertEqual((8, 8, 33), vol.voxel_size)
     self.assertEqual(4, vol.ndim)
     self.assertEqual(np.uint64, vol.dtype)
     self.assertEqual((10, 11, 12), vol.volume_size)
     self.assertSequenceEqual([bbox], vol.bounding_boxes)
 
-    # Test with serialized metadata object
-    vol = tsv.TensorstoreVolume(spec, metadata.to_json())
-    self.assertEqual((8, 8, 33), vol.voxel_size)
-    self.assertSequenceEqual([bbox], vol.bounding_boxes)
-
-    # Test with malformed serialized metadata object
+  def test_metadata_mismatch(self):
+    # Bad TS shape
+    data = np.random.uniform(size=[50, 60, 70])
+    metadata = tsv.TensorstoreMetadata(
+        bounding_boxes=[BBox([0, 0, 0], [10, 11, 12])],
+        voxel_size=(8, 8, 33),
+    )
+    spec = {
+        'driver': 'array',
+        'dtype': str(data.dtype),
+        'array': data,
+    }
     with self.assertRaises(ValueError):
-      tsv.TensorstoreVolume(spec, 'totally not json')
+      tsv.TensorstoreVolume(tsv.TensorstoreConfig(spec, metadata))
 
-    # Test with metadata from file
-    tmp_dir = FLAGS.test_tmpdir
-    metadata_path = os.path.join(tmp_dir, 'metadata.json')
-    with file.Open(metadata_path, 'w') as f:
-      f.write(metadata.to_json())
-    vol = tsv.TensorstoreVolume(spec, metadata_path)
-    self.assertEqual((8, 8, 33), vol.voxel_size)
-    self.assertSequenceEqual([bbox], vol.bounding_boxes)
-
-    # Test with malformed metadata file
-    metadata_path = os.path.join(tmp_dir, 'metadata_malformed.json')
-    with open(metadata_path, 'w') as f:
-      f.write('no json here')
+    # Bad voxel_size
+    data = np.random.uniform(size=[1, 50, 60, 70])
+    metadata = tsv.TensorstoreMetadata(
+        bounding_boxes=[BBox([0, 0, 0], [10, 11, 12])],
+        voxel_size=(8, 8, 0),
+    )
+    spec = {
+        'driver': 'array',
+        'dtype': str(data.dtype),
+        'array': data,
+    }
     with self.assertRaises(ValueError):
-      tsv.TensorstoreVolume(spec, metadata_path)
+      tsv.TensorstoreVolume(tsv.TensorstoreConfig(spec, metadata))
 
-    # Test with nonexistant metadata file
+    # Bad bounding boxes
+    data = np.random.uniform(size=[1, 50, 60, 70])
+    metadata = tsv.TensorstoreMetadata(
+        bounding_boxes=[],
+        voxel_size=(8, 8, 0),
+    )
+    spec = {
+        'driver': 'array',
+        'dtype': str(data.dtype),
+        'array': data,
+    }
     with self.assertRaises(ValueError):
-      tsv.TensorstoreVolume(
-          spec, '/if/this/file/exists/and/is/valid/Ill/eat/my/hat.json')
+      tsv.TensorstoreVolume(tsv.TensorstoreConfig(spec, metadata))
+
+    # Bad TS extension beyond bounding boxes
+    data = np.random.uniform(size=[1, 50, 60, 70])
+    metadata = tsv.TensorstoreMetadata(
+        bounding_boxes=[BBox([0, 0, 0], [10, 11, 12])],
+        voxel_size=(8, 8, 33),
+    )
+    spec = {
+        'driver': 'array',
+        'dtype': str(data.dtype),
+        'array': data,
+    }
+    with self.assertRaises(ValueError):
+      tsv.TensorstoreVolume(tsv.TensorstoreConfig(spec, metadata))
 
   def test_tensorstore_array_creation(self):
-    metadata = tsv.TensorstoreVolumeMetadata(
+    metadata = tsv.TensorstoreMetadata(
         bounding_boxes=[BBox([0, 0, 0], [10, 11, 12])],
         voxel_size=(8, 8, 33),
     )
@@ -107,7 +138,7 @@ class TensorstoreTest(absltest.TestCase):
     self.assertEqual((10, 11, 12), vol.volume_size)
 
   def test_tensorstore_access(self):
-    metadata = tsv.TensorstoreVolumeMetadata(
+    metadata = tsv.TensorstoreMetadata(
         bounding_boxes=[BBox([0, 0, 0], [10, 11, 12])],
         voxel_size=(8, 8, 33),
     )

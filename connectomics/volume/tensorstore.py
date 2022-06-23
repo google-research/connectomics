@@ -15,8 +15,7 @@
 """A Tensorstore-backed Volume."""
 
 import dataclasses
-import json
-import typing
+import functools
 from typing import Any, Sequence, Union
 
 from connectomics.common import array
@@ -35,9 +34,18 @@ def tuple_deserialize(v: Sequence[Union[int, float]]) -> array.Tuple3f:
   return tuple(v)
 
 
+TensorstoreSpec = Union[str, dict[str, Any]]
+
+
 @dataclasses_json.dataclass_json
-@dataclasses.dataclass
-class TensorstoreVolumeMetadata:
+@functools.partial(dataclasses.dataclass, eq=True)
+class TensorstoreMetadata:
+  """Additional volumetric metadata associated with TensorStore volumes.
+
+  Attributes:
+    voxel_size: Voxel size in nm.
+    bounding_boxes: Bounding boxes associated with this tensorstore.
+  """
   voxel_size: array.Tuple3f = dataclasses.field(
       metadata=dataclasses_json.config(decoder=tuple_deserialize))
   bounding_boxes: list[bounding_box.BoundingBox] = dataclasses.field(
@@ -45,44 +53,47 @@ class TensorstoreVolumeMetadata:
           encoder=lambda bboxes: [b.spec for b in bboxes],
           decoder=lambda bboxes: [bounding_box.deserialize(b) for b in bboxes]))
 
+  def __post_init__(self):
+    # Purely to ensure that voxel_size is a tuple if initialized with a list.
+    self.voxel_size = tuple(self.voxel_size)
+
+
+@dataclasses_json.dataclass_json
+@functools.partial(dataclasses.dataclass, eq=True)
+class TensorstoreConfig:
+  spec: TensorstoreSpec
+  metadata: TensorstoreMetadata = dataclasses.field(
+      metadata=dataclasses_json.config(
+          decoder=file.dataclass_loader(TensorstoreMetadata)))
+
 
 class TensorstoreVolume(base.BaseVolume):
   """Tensorstore-backed Volume."""
 
   _store: ts.TensorStore
-  _metadata: TensorstoreVolumeMetadata
+  _config: TensorstoreConfig
 
-  def __init__(self, tensorstore_spec: Union[str, dict[str, Any]],
-               metadata: Union[str, TensorstoreVolumeMetadata]):
+  def __init__(self, config: TensorstoreConfig):
+    if not config.metadata.bounding_boxes:
+      raise ValueError('Config must have at least one bounding box')
+    if not config.metadata.voxel_size or any(
+        [v <= 0 for v in config.metadata.voxel_size]):
+      raise ValueError(f'Invalid voxel size: {config.metadata.voxel_size}')
 
-    if isinstance(tensorstore_spec, str):
-      tensorstore_spec = json.loads(tensorstore_spec)
-    # Casting is okay here since we've converted from str to dict[str, Any]
-    # above.
-    tensorstore_spec = typing.cast(dict[str, Any], tensorstore_spec)
+    self._config = config
+    store = ts.open(config.spec).result()
 
-    if isinstance(metadata, str):
-      # Try and deserialize it first, since that's usually faster than file
-      # operations. If that fails, assume it's a file path.
-      try:
-        self._metadata = TensorstoreVolumeMetadata.from_json(metadata)
-      except json.decoder.JSONDecodeError:
-        # Try and load it as a file path instead.
-        try:
-          with file.GFile(metadata, 'r') as f:
-            # TODO(timblakely): Due to
-            # https://github.com/lidatong/dataclasses-json/issues/318 we can't
-            # use the spec(), which in turn means we can't use dataclass.load or
-            # .loads. Instead we just read the contents directly and attempt to
-            # parse it as json.
-            self._metadata = TensorstoreVolumeMetadata.from_json(f.read())
-        except file.NotFoundError:
-          raise ValueError(
-              'Could not parse metadata json, or file does not exist: '
-              f'{metadata}') from None
-    else:
-      self._metadata = metadata
-    self._store = ts.open(tensorstore_spec).result()
+    if store.ndim != 4:
+      raise ValueError(f'Expected tensorstore to be 4D, found: {store.ndim}')
+    valid_sizes = np.all([
+        store.shape[3:0:-1] <= bbox.end
+        for bbox in config.metadata.bounding_boxes
+    ])
+
+    if not valid_sizes:
+      raise ValueError(
+          'TensorStore volume extends beyond all known bounding boxes')
+    self._store = store
 
   def get_points(self, points: array.PointLookups) -> np.ndarray:
     return self._store[points].read().result()
@@ -98,7 +109,7 @@ class TensorstoreVolume(base.BaseVolume):
 
   @property
   def voxel_size(self) -> array.Tuple3f:
-    return self._metadata.voxel_size
+    return self._config.metadata.voxel_size
 
   @property
   def shape(self) -> array.Tuple4i:
@@ -114,21 +125,23 @@ class TensorstoreVolume(base.BaseVolume):
 
   @property
   def bounding_boxes(self) -> list[bounding_box.BoundingBox]:
-    return self._metadata.bounding_boxes
+    return self._config.metadata.bounding_boxes
 
   @property
-  def metadata(self) -> TensorstoreVolumeMetadata:
-    return self._metadata
+  def metadata(self) -> TensorstoreMetadata:
+    return self._config.metadata
 
 
 class TensorstoreArrayVolume(TensorstoreVolume):
   """TensorStore volume using existing, in-memory arrays."""
 
-  def __init__(self, data: np.ndarray,
-               metadata: Union[str, TensorstoreVolumeMetadata]):
-    super().__init__(
-        {
+  def __init__(self, data: np.ndarray, metadata: Union[str,
+                                                       TensorstoreMetadata]):
+    config = TensorstoreConfig(
+        spec={
             'driver': 'array',
             'dtype': str(data.dtype),
             'array': data,
-        }, metadata)
+        },
+        metadata=metadata)
+    super().__init__(config)

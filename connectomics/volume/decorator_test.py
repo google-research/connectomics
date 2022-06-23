@@ -22,6 +22,7 @@ from connectomics.common import array
 from connectomics.common import bounding_box
 from connectomics.volume import base as base_volume
 from connectomics.volume import decorator
+from connectomics.volume import descriptor as vd
 import numpy as np
 import numpy.testing as npt
 
@@ -148,8 +149,7 @@ class CustomDecoratorFactory(decorator.DecoratorFactory):
 class DecoratorFactoryTest(absltest.TestCase):
 
   def test_default_loader(self):
-    bv = base_volume
-    descriptor: bv.VolumeDescriptor = bv.VolumeDescriptor.from_json("""{
+    descriptor: vd.VolumeDescriptor = vd.VolumeDescriptor.from_json("""{
           "decorator_specs": [{
             "decorator": "Upsample",
             "args": [2,2,1]
@@ -160,8 +160,7 @@ class DecoratorFactoryTest(absltest.TestCase):
     self.assertIsInstance(decorated, decorator.Upsample)
 
     # Ensure it loads only from `globals()`, aka decorator.py.
-    descriptor: base_volume.VolumeDescriptor = bv.VolumeDescriptor.from_json(
-        """{
+    descriptor: vd.VolumeDescriptor = vd.VolumeDescriptor.from_json("""{
           "decorator_specs": [{
             "decorator": "CustomDecorator"
           }]
@@ -171,10 +170,8 @@ class DecoratorFactoryTest(absltest.TestCase):
       decorated = decorator.from_specs(vol, descriptor.decorator_specs)
 
   def test_custom_loader(self):
-    bv = base_volume
 
-    descriptor: base_volume.VolumeDescriptor = bv.VolumeDescriptor.from_json(
-        """{
+    descriptor: vd.VolumeDescriptor = vd.VolumeDescriptor.from_json("""{
           "decorator_specs": [{
             "decorator": "CustomDecorator"
           }]
@@ -190,10 +187,8 @@ class DecoratorFactoryTest(absltest.TestCase):
     self.assertTrue(factory.called)
 
   def test_cascading_decorators(self):
-    bv = base_volume
 
-    descriptor: base_volume.VolumeDescriptor = bv.VolumeDescriptor.from_json(
-        """{
+    descriptor: vd.VolumeDescriptor = vd.VolumeDescriptor.from_json("""{
           "decorator_specs": [{
             "decorator": "Upsample",
             "args": [2,2,1]

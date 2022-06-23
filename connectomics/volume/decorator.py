@@ -21,6 +21,15 @@ from connectomics.common import bounding_box
 from connectomics.volume import base
 import numpy as np
 
+# List of python dicts of specs to decorate a volume. Expected to have the
+# following fields:
+#   "decorator": Name of the decorator class. By default the decorator is looked
+#     up via the GlobalsDecoratorFactory, which simply searches `globals()` for
+#     a class of the same name.
+#   "args": Optional. List of decorator-specific arguments.
+#   "kwargs": Optional. Dict of decorator-specific keyword args.
+DecoratorSpec = dict[str, Any]
+
 
 class DecoratorFactory:
   """Constructs a VolumeDecorator based on a name and arguments."""
@@ -42,7 +51,7 @@ class GlobalsDecoratorFactory:
 
 
 def from_specs(volume: base.BaseVolume,
-               specs: list[base.DecoratorSpec],
+               specs: list[DecoratorSpec],
                decorator_factory: Optional[DecoratorFactory] = None):
   """Decorates the given volume from the given specs.
 

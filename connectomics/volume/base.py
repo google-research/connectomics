@@ -14,42 +14,12 @@
 # limitations under the License.
 """4-D volume abstraction."""
 
-import dataclasses
-import functools
 import typing
-from typing import Any, List, Optional
+from typing import List
 
 from connectomics.common import array
 from connectomics.common import bounding_box
-import dataclasses_json
 import numpy as np
-
-# List of python dicts of specs to decorate a volume. Expected to have the
-# following fields:
-#   "decorator": Name of the decorator class. Currently must be available within
-#     `globals()`.
-#   "args": Optional. List of decorator-specific arguments.
-#   "kwargs": Optional. Dict of decorator-specific keyword args.
-DecoratorSpec = dict[str, Any]
-
-
-@dataclasses_json.dataclass_json
-@functools.partial(dataclasses.dataclass, frozen=True)
-class VolumeDescriptor:
-  """De/Serializable description of a volume."""
-
-  # List of python dicts of specs to decorate the volume via
-  # decorator.from_specs. E.g.:
-  #   '[{"decorator": "ZSub", "args": [{"2198": 2197}]}]'
-  # If left unspecified, the undecorated volume is used.
-  decorator_specs: list[DecoratorSpec] = dataclasses.field(default_factory=list)
-
-  # Exactly one of `volumeinfo` or `tensorstore_config` must be specified
-  # JSON tensorstore configuration.
-  tensorstore_config: Optional[dict[str, Any]] = None
-
-  # Internal use only. Path to the VolumeInfo file..
-  volinfo: Optional[str] = None
 
 
 # TODO(timblakely): Make generic-typed so it exposes both VolumeInfo and
