@@ -15,11 +15,44 @@
 """4-D volume abstraction."""
 
 import typing
-from typing import List
+from typing import Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.volume import subvolume
 import numpy as np
+
+Subvolume = subvolume.Subvolume
+
+
+class VolumeIndexer:
+  """Interface for indexing supporting point lookups and slices."""
+  _volume: 'BaseVolume'
+  slices: array.CanonicalSlice
+
+  def __init__(self, volume: 'BaseVolume'):
+    self._volume = volume
+
+  def __getitem__(
+      self, ind: array.IndexExpOrPointLookups
+  ) -> Union[np.ndarray, tuple[array.CanonicalSlice, np.ndarray]]:
+    """Returns the results of a point lookup or the slices and sliced data."""
+    ind = array.normalize_index(ind, self._volume.shape)
+
+    if array.is_point_lookup(ind):
+      # Hack to make pytype happy. We've taken care of checking for the
+      # point-lookup path in the above conditional
+      ind = typing.cast(array.PointLookups, ind)
+      return self._volume.get_points(ind)
+    return ind, self._volume.get_slices(ind)
+
+
+class DirectVolumeIndexer(VolumeIndexer):
+  """VolumeIndexer that ignores whether access was point lookup or slices."""
+
+  def __getitem__(self, ind: array.IndexExpOrPointLookups) -> np.ndarray:
+    result = super().__getitem__(ind)
+    return result if isinstance(result, np.ndarray) else result[1]
 
 
 # TODO(timblakely): Make generic-typed so it exposes both VolumeInfo and
@@ -27,23 +60,31 @@ import numpy as np
 class BaseVolume:
   """Common interface to multiple volume backends for Decorators."""
 
-  # TODO(timblakely): Convert to returning Subvolumes.
-  def __getitem__(self, ind: array.IndexExpOrPointLookups) -> np.ndarray:
-    ind = array.normalize_index(ind, self.shape)
+  def __getitem__(
+      self, ind: array.IndexExpOrPointLookups) -> Union[np.ndarray, Subvolume]:
+    result = VolumeIndexer(self)[ind]
+    if isinstance(result, np.ndarray):
+      # Point lookup
+      return result
+    # Slice
+    slices, data = result
+    rel_start, rel_end = tuple(
+        zip(*[(i.start, i.stop) for i in slices[3:0:-1]]))
+    return Subvolume(data,
+                     bounding_box.BoundingBox(start=rel_start, end=rel_end))
 
-    if array.is_point_lookup(ind):
-      # Hack to make pytype happy. We've taken care of checking for the
-      # point-lookup path in the above conditional
-      ind = typing.cast(array.PointLookups, ind)
-      return self.get_points(ind)
-    return self.get_slices(ind)
+  # TODO(timblakely): Only a temporary shim while we convert all internal usage to
+  # using Subvolumes.
+  @property
+  def asarray(self) -> DirectVolumeIndexer:
+    """__getitem__-like indexing that only returns the bare ndarray."""
+    return DirectVolumeIndexer(self)
 
   # TODO(timblakely): Remove any usage of this with Vector3j.
   def get_points(self, points: array.PointLookups) -> np.ndarray:
     """Returns values at points given `channel, list[X], list[Y], list[Z]`."""
     raise NotImplementedError
 
-  # TODO(timblakely): Convert to returning Subvolumes.
   def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
     """Returns a subvolume of data based on a specified set of CZYX slices."""
     raise NotImplementedError
@@ -74,7 +115,7 @@ class BaseVolume:
     raise NotImplementedError
 
   @property
-  def bounding_boxes(self) -> List[bounding_box.BoundingBox]:
+  def bounding_boxes(self) -> list[bounding_box.BoundingBox]:
     """List of bounding boxes contained in this volume."""
     raise NotImplementedError
 

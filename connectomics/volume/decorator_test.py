@@ -120,10 +120,11 @@ class DecoratorTest(absltest.TestCase):
         upscaled.bounding_boxes[0])
 
     expected = data[0, 1, 1, 5].ravel()[0]
-    self.assertEqual(upscaled[0, 1, 2, 10].ravel()[0], expected)
+    # TODO(timblakely): Figure out why pytype thinks this is an error
+    self.assertEqual(upscaled[0, 1, 2, 10].data.ravel()[0], expected)  # pytype: disable=attribute-error
 
-    self.assertTrue(np.all(upscaled[0, 0:2, 2:4, 10] == expected))
-    self.assertFalse(np.all(upscaled[0, 1:3, 3:5, 10] == expected))
+    self.assertTrue(np.all(upscaled[0, 0:2, 2:4, 10].data == expected))
+    self.assertFalse(np.all(upscaled[0, 1:3, 3:5, 10].data == expected))
 
 
 class CustomDecorator(decorator.VolumeDecorator):

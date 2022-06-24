@@ -98,7 +98,6 @@ class TensorstoreVolume(base.BaseVolume):
   def get_points(self, points: array.PointLookups) -> np.ndarray:
     return self._store[points].read().result()
 
-  # TODO(timblakely): Convert to returning Subvolumes.
   def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
     return self._store[slices].read().result()
 

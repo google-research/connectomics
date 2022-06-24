@@ -146,7 +146,7 @@ class TensorstoreTest(absltest.TestCase):
     vol = tsv.TensorstoreArrayVolume(data, metadata)
 
     index_exp = np.s_[:, 2:7, :, 8:]
-    npt.assert_array_equal(data[index_exp], vol[index_exp])
+    npt.assert_array_equal(data[index_exp], vol[index_exp].data)
 
 
 if __name__ == '__main__':

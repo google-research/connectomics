@@ -17,6 +17,7 @@
 from absl.testing import absltest
 from connectomics.common import array
 from connectomics.volume import base
+import numpy as np
 
 
 class BaseVolumeTest(absltest.TestCase):
@@ -48,6 +49,7 @@ class BaseVolumeTest(absltest.TestCase):
         tself.assertLen(points, 4)
         for i in range(1, 4):
           tself.assertLen(points[i], 3)
+        return np.random.uniform(size=[1, 3, 3, 3])
 
     v = ShimVolume()
     _ = v[0, (1, 2, 3), (4, 5, 6), (7, 8, 9)]
@@ -81,10 +83,23 @@ class BaseVolumeTest(absltest.TestCase):
         self.called = True
         tself.assertLen(slices, 4)
         tself.assertEqual(expected, slices)
+        shape = [(i.stop - i.start) for i in slices]
+        data = np.random.uniform(size=shape)
+        return data
 
     v = ShimVolume()
-    _ = v[0, 1:3, 5:, :]
+    sv = v[0, 1:3, 5:, :]
     self.assertTrue(v.called)
+    self.assertEqual(sv.data.shape, (1, 2, 6, 10))
+    self.assertEqual(tuple(sv.bbox.start), (0, 5, 1))
+    self.assertEqual(tuple(sv.bbox.end), (10, 11, 3))
+    self.assertEqual(tuple(sv.bbox.size), (10, 6, 2))
+
+    # Test accessing the data directly without the subvolume abstraction.
+    v.called = False
+    data = v.asarray[0, 1:3, 5:, :]
+    self.assertTrue(v.called)
+    self.assertEqual(data.shape, (1, 2, 6, 10))
 
 
 if __name__ == '__main__':
