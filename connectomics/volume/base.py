@@ -25,6 +25,11 @@ import numpy as np
 Subvolume = subvolume.Subvolume
 
 
+def slice_to_bbox(ind: array.CanonicalSlice) -> bounding_box.BoundingBox:
+  rel_start, rel_end = tuple(zip(*[(i.start, i.stop) for i in ind[3:0:-1]]))
+  return bounding_box.BoundingBox(start=rel_start, end=rel_end)
+
+
 class VolumeIndexer:
   """Interface for indexing supporting point lookups and slices."""
   _volume: 'BaseVolume'
@@ -35,7 +40,7 @@ class VolumeIndexer:
 
   def __getitem__(
       self, ind: array.IndexExpOrPointLookups
-  ) -> Union[np.ndarray, tuple[array.CanonicalSlice, np.ndarray]]:
+  ) -> Union[np.ndarray, subvolume.Subvolume]:
     """Returns the results of a point lookup or the slices and sliced data."""
     ind = array.normalize_index(ind, self._volume.shape)
 
@@ -44,7 +49,7 @@ class VolumeIndexer:
       # point-lookup path in the above conditional
       ind = typing.cast(array.PointLookups, ind)
       return self._volume.get_points(ind)
-    return ind, self._volume.get_slices(ind)
+    return subvolume.Subvolume(self._volume.get_slices(ind), slice_to_bbox(ind))
 
 
 class DirectVolumeIndexer(VolumeIndexer):
@@ -52,7 +57,7 @@ class DirectVolumeIndexer(VolumeIndexer):
 
   def __getitem__(self, ind: array.IndexExpOrPointLookups) -> np.ndarray:
     result = super().__getitem__(ind)
-    return result if isinstance(result, np.ndarray) else result[1]
+    return result if isinstance(result, np.ndarray) else result.data
 
 
 # TODO(timblakely): Make generic-typed so it exposes both VolumeInfo and
@@ -62,16 +67,14 @@ class BaseVolume:
 
   def __getitem__(
       self, ind: array.IndexExpOrPointLookups) -> Union[np.ndarray, Subvolume]:
-    result = VolumeIndexer(self)[ind]
-    if isinstance(result, np.ndarray):
-      # Point lookup
-      return result
-    # Slice
-    slices, data = result
-    rel_start, rel_end = tuple(
-        zip(*[(i.start, i.stop) for i in slices[3:0:-1]]))
-    return Subvolume(data,
-                     bounding_box.BoundingBox(start=rel_start, end=rel_end))
+    return VolumeIndexer(self)[ind]
+
+  def __setitem__(self, ind: array.IndexExpOrPointLookups, value: np.ndarray):
+    ind = array.normalize_index(ind, self.shape)
+    if array.is_point_lookup(ind):
+      self.write_points(ind, value)
+    else:
+      self.write_slices(ind, value)
 
   # TODO(timblakely): Only a temporary shim while we convert all internal usage to
   # using Subvolumes.
@@ -88,6 +91,19 @@ class BaseVolume:
   def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
     """Returns a subvolume of data based on a specified set of CZYX slices."""
     raise NotImplementedError
+
+  def write_points(self, points: array.PointLookups, values: np.ndarray):
+    """Writes values at points given `channel, list[X], list[Y], list[Z]`."""
+    raise NotImplementedError
+
+  def write_slices(self, slices: array.CanonicalSlice, value: np.ndarray):
+    """Writes a subvolume of data based on a specified set of CZYX slices."""
+    raise NotImplementedError
+
+  def write(self, subvol: subvolume.Subvolume):
+    self.write_slices(
+        array.normalize_index(subvol.bbox.to_slice4d(), self.shape),
+        subvol.data)
 
   @property
   def volume_size(self) -> array.Tuple3i:

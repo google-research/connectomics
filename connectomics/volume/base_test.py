@@ -18,6 +18,18 @@ from absl.testing import absltest
 from connectomics.common import array
 from connectomics.volume import base
 import numpy as np
+import numpy.testing as npt
+
+
+class ShimVolume(base.BaseVolume):
+
+  def __init__(self, *args, **kwargs):
+    super(*args, **kwargs)
+    self.called = False
+
+  @property
+  def shape(self) -> array.Tuple4i:
+    return (1, 12, 11, 10)
 
 
 class BaseVolumeTest(absltest.TestCase):
@@ -34,15 +46,7 @@ class BaseVolumeTest(absltest.TestCase):
   def test_get_points(self):
     tself = self
 
-    class ShimVolume(base.BaseVolume):
-
-      def __init__(self, *args, **kwargs):
-        super(*args, **kwargs)
-        self.called = False
-
-      @property
-      def shape(self) -> array.Tuple4i:
-        return (1, 12, 11, 10)
+    class GetPointsVolume(ShimVolume):
 
       def get_points(self, points):
         self.called = True
@@ -51,11 +55,11 @@ class BaseVolumeTest(absltest.TestCase):
           tself.assertLen(points[i], 3)
         return np.random.uniform(size=[1, 3, 3, 3])
 
-    v = ShimVolume()
+    v = GetPointsVolume()
     _ = v[0, (1, 2, 3), (4, 5, 6), (7, 8, 9)]
     self.assertTrue(v.called)
 
-    v = ShimVolume()
+    v = GetPointsVolume()
     _ = v[0, [1, 2, 3], [4, 5, 6], [7, 8, 9]]
     self.assertTrue(v.called)
 
@@ -69,15 +73,7 @@ class BaseVolumeTest(absltest.TestCase):
         slice(0, 10, 1),
     )
 
-    class ShimVolume(base.BaseVolume):
-
-      def __init__(self, *args, **kwargs):
-        super(*args, **kwargs)
-        self.called = False
-
-      @property
-      def shape(self) -> array.Tuple4i:
-        return (1, 12, 11, 10)
+    class GetSlicesVolume(ShimVolume):
 
       def get_slices(self, slices):
         self.called = True
@@ -87,7 +83,7 @@ class BaseVolumeTest(absltest.TestCase):
         data = np.random.uniform(size=shape)
         return data
 
-    v = ShimVolume()
+    v = GetSlicesVolume()
     sv = v[0, 1:3, 5:, :]
     self.assertTrue(v.called)
     self.assertEqual(sv.data.shape, (1, 2, 6, 10))
@@ -100,6 +96,49 @@ class BaseVolumeTest(absltest.TestCase):
     data = v.asarray[0, 1:3, 5:, :]
     self.assertTrue(v.called)
     self.assertEqual(data.shape, (1, 2, 6, 10))
+
+  def test_write_points(self):
+    tself = self
+
+    expected = [1, 2, 3]
+
+    class WritePointsVolume(ShimVolume):
+
+      def write_points(self, points, values):
+        self.called = True
+        tself.assertLen(points, 4)
+        for i in range(1, 4):
+          tself.assertLen(points[i], 3)
+        tself.assertLen(values, 3)
+        npt.assert_array_equal(values, expected)
+
+    v = WritePointsVolume()
+    v[0, (1, 2, 3), (4, 5, 6), (7, 8, 9)] = np.array(expected)
+    self.assertTrue(v.called)
+
+  def test_write_slices(self):
+    tself = self
+
+    expected_slices = (
+        slice(0, 1, None),
+        slice(1, 3, 1),
+        slice(5, 11, 1),
+        slice(0, 10, 1),
+    )
+
+    expected_data = np.random.uniform(size=[1, 12, 11, 10])
+
+    class WriteSlicesVolume(ShimVolume):
+
+      def write_slices(self, slices, data):
+        self.called = True
+        tself.assertLen(slices, 4)
+        tself.assertEqual(expected_slices, slices)
+        npt.assert_array_equal(expected_data, data)
+
+    v = WriteSlicesVolume()
+    v[0, 1:3, 5:, :] = expected_data
+    self.assertTrue(v.called)
 
 
 if __name__ == '__main__':

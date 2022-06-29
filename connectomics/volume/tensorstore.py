@@ -130,6 +130,11 @@ class TensorstoreVolume(base.BaseVolume):
   def metadata(self) -> TensorstoreMetadata:
     return self._config.metadata
 
+  def write_slices(self, slices: array.CanonicalSlice, value: np.ndarray):
+    """Writes a subvolume of data based on a specified set of CZYX slices."""
+    with ts.Transaction():
+      self._store[slices].write(value).result()
+
 
 class TensorstoreArrayVolume(TensorstoreVolume):
   """TensorStore volume using existing, in-memory arrays."""
