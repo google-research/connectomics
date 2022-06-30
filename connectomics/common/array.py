@@ -22,10 +22,12 @@ errors at run-time during long-running pipelines.
 """
 
 from collections import abc
+import dataclasses
 import numbers
 from typing import Any, Tuple, TypeVar, Type, Union
 
 from connectomics.common import array_mixins
+import dataclasses_json
 import numpy as np
 import numpy.typing as npt
 
@@ -47,6 +49,10 @@ Tuple3i = Tuple[int, int, int]
 Tuple4i = Tuple[int, int, int, int]
 ArrayLike3d = Union[npt.ArrayLike, 'ImmutableArray', 'MutableArray', Tuple3f,
                     Tuple3i]
+
+TupleField = dataclasses.field(
+    metadata=dataclasses_json.config(
+        decoder=lambda v: v if isinstance(v, tuple) else tuple(v)))
 
 
 def is_point_lookup(ind: IndexExpOrPointLookups) -> bool:

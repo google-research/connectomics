@@ -15,11 +15,14 @@
 """Base class encapsulating processing a subvolume to another subvolume."""
 
 import collections
+import dataclasses
 import enum
-from typing import Tuple, Optional, Union
+from typing import Any, Tuple, Optional, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.volume import descriptor
+import dataclasses_json
 import numpy as np
 
 SuggestedXyz = collections.namedtuple('SuggestedXyz', 'x y z')
@@ -28,6 +31,74 @@ TupleOrSuggestedXyz = Union[XyzTuple, SuggestedXyz]  # pylint: disable=invalid-n
 
 ImmutableArray = array.ImmutableArray
 MutableArray = array.MutableArray
+
+
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass
+class SubvolumeProcessorConfig:
+  """Configuration for a given subvolume processor."""
+  # Name of class exposed in connectomics.volume.processors.
+  name: str
+
+  # Arguments to SubvolumeProcessor, passed in as kwargs.
+  args: Optional[dict[str, Any]] = None
+
+
+# TODO(timblakely): Potentially replace this with just (ProcessVolumeConfig, BBox)
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass
+class ProcessSubvolumeRequest:
+  """Work unit describing a subvolume to process."""
+
+  # Processor configuration.
+  processor: SubvolumeProcessorConfig
+
+  # Directory to write out intermediate data.
+  output_dir: str
+
+  # TODO(timblakely): Make bounding boxes a proper dataclass so these
+  # encoder/decoders are no longer necessary. Box to process.
+  box: bounding_box.BoundingBox = dataclasses.field(
+      metadata=dataclasses_json.config(
+          encoder=lambda b: b.spec, decoder=bounding_box.deserialize))
+
+
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass
+class ProcessVolumeConfig:
+  """User-supplied configuration."""
+
+  # Input volume to process.
+  input_volume: descriptor.VolumeDescriptor
+
+  # Output volume. Note that only TensorStore is currently supported. The
+  # "metadata" field of the TensorStore spec should not be populated, as it is
+  # automatically filled in by the processor.
+  output_volume: descriptor.VolumeDescriptor
+
+  # Output directory to write the volumetric data, inserted automatically into
+  # the output_volume's TensorStore spec.
+  output_dir: str
+
+  # Bounding boxes to process.
+  bounding_boxes: list[bounding_box.BoundingBox] = dataclasses.field(
+      metadata=dataclasses_json.config(
+          encoder=lambda bboxes: [b.spec for b in bboxes],
+          decoder=lambda bboxes: [bounding_box.deserialize(b) for b in bboxes]))
+
+  # Processor configuration to apply.
+  processor: SubvolumeProcessorConfig
+
+  # Size of each subvolume to process.
+  subvolume_size: array.Tuple3i = array.TupleField
+
+  # Amount of overlap between processed subvolumes. This is independent of any
+  # additional context required by individual processors.
+  overlap: array.Tuple3i = array.TupleField
+
+  # TODO(timblakely): Support back shifting edge boxes. TODO(timblakely): Support
+  # expanding underlying tensorstore bounds so that end chunks can be fully
+  # processed.
 
 
 class OutputNums(enum.Enum):
@@ -167,9 +238,11 @@ class SubvolumeProcessor:
     return box.adjusted_by(start=front, end=-back)
 
   def crop_box_and_data(
-      self, box: bounding_box.BoundingBoxBase,
+      self,
+      box: bounding_box.BoundingBoxBase,
       # TODO(timblakely): Strongly type this as ArrayCZYX
-      data: np.ndarray) -> Tuple[bounding_box.BoundingBoxBase, np.ndarray]:
+      data: np.ndarray
+  ) -> Tuple[bounding_box.BoundingBoxBase, np.ndarray]:
     """Crop data front/back by self.context.
 
     Args:
