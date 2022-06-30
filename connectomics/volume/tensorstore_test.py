@@ -114,20 +114,6 @@ class TensorstoreTest(absltest.TestCase):
     with self.assertRaises(ValueError):
       tsv.TensorstoreVolume(tsv.TensorstoreConfig(spec, metadata))
 
-    # Bad TS extension beyond bounding boxes
-    data = np.random.uniform(size=[1, 50, 60, 70])
-    metadata = tsv.TensorstoreMetadata(
-        bounding_boxes=[BBox([0, 0, 0], [10, 11, 12])],
-        voxel_size=(8, 8, 33),
-    )
-    spec = {
-        'driver': 'array',
-        'dtype': str(data.dtype),
-        'array': data,
-    }
-    with self.assertRaises(ValueError):
-      tsv.TensorstoreVolume(tsv.TensorstoreConfig(spec, metadata))
-
   def test_tensorstore_array_creation(self):
     metadata = tsv.TensorstoreMetadata(
         bounding_boxes=[BBox([0, 0, 0], [10, 11, 12])],

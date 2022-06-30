@@ -16,7 +16,7 @@
 
 import dataclasses
 import functools
-from typing import Any, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
@@ -62,7 +62,8 @@ class TensorstoreMetadata:
 @functools.partial(dataclasses.dataclass, eq=True)
 class TensorstoreConfig:
   spec: TensorstoreSpec
-  metadata: TensorstoreMetadata = dataclasses.field(
+  metadata: Optional[TensorstoreMetadata] = dataclasses.field(
+      default=None,
       metadata=dataclasses_json.config(
           decoder=file.dataclass_loader(TensorstoreMetadata)))
 
@@ -85,14 +86,7 @@ class TensorstoreVolume(base.BaseVolume):
 
     if store.ndim != 4:
       raise ValueError(f'Expected tensorstore to be 4D, found: {store.ndim}')
-    valid_sizes = np.all([
-        store.shape[3:0:-1] <= bbox.end
-        for bbox in config.metadata.bounding_boxes
-    ])
 
-    if not valid_sizes:
-      raise ValueError(
-          'TensorStore volume extends beyond all known bounding boxes')
     self._store = store
 
   def get_points(self, points: array.PointLookups) -> np.ndarray:
