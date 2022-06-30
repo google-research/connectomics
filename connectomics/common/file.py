@@ -54,7 +54,7 @@ def load_dataclass(constructor: T, v: Union[str, dict[str, Any], T, None]) -> T:
   Returns:
     New dataclass instance.
   """
-  if isinstance(v, type(T)) or v is None:
+  if isinstance(v, type(constructor)) or v is None:
     return v
   elif isinstance(v, str):
     try:
