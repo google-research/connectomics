@@ -15,14 +15,15 @@
 """Generate overlapping boxes mapped to a coordinate space."""
 
 import bisect
+import dataclasses
 import functools
 import itertools
 import json
-from typing import Any, List, Optional, Sequence, Tuple, Iterable, TypeVar, Union
+from typing import List, Optional, Sequence, Tuple, Iterable, TypeVar, Union
 
-from absl import logging
 from connectomics.common import array
 from connectomics.common import bounding_box
+import dataclasses_json
 import numpy as np
 
 S = TypeVar('S', bound='BoxGenerator')
@@ -52,61 +53,6 @@ class BoxGeneratorBase:
   def index_to_cropped_box(self, intindex: int) -> bounding_box.BoundingBox:
     raise NotImplementedError()
 
-  @property
-  def spec(self) -> dict[str, Any]:
-    """Returns the values required to serialize the generator."""
-    spec = self._spec
-    spec['type'] = self.__class__.__name__
-    return spec
-
-  @property
-  def _spec(self) -> dict[str, Any]:
-    """Implementation-specific generator specs."""
-    raise NotImplementedError()
-
-  @staticmethod
-  def from_spec(spec: dict[str, Any]) -> 'BoxGeneratorBase':
-    """Create a new instance from a spec.
-
-    Args:
-      spec: Dictionary of values that define a box generator. Refer to the
-        respective implementations for required fields.
-
-    Returns:
-      A new instance of the generator.
-
-    Raises:
-      ValueError: If the type is unknown, or if the correct type cannot be
-        guessed based on the spec if the 'type' field is missing.
-    """
-
-    if 'type' in spec:
-      generator_type = spec['type']
-      del spec['type']
-      if generator_type not in globals():
-        raise ValueError(f'Unknown box generator type: {generator_type}')
-      generator_class = globals()[generator_type]
-    else:
-      if 'outer_boxes' in spec:
-        generator_class = MultiBoxGenerator
-      elif 'outer_box' in spec:
-        generator_class = BoxGenerator
-      else:
-        raise ValueError(
-            'Cannot infer generator type from spec. Please specify \'type\' '
-            'explicitly in spec')
-      logging.warning(
-          'Type not specified in BoxGeneratorBase, attempting to guess based '
-          'on spec. Assuming: %s', generator_class.__name__)
-    return generator_class._from_spec(spec)  # pylint: disable=protected-access
-
-  @staticmethod
-  def _from_spec(spec: dict[str, Any]) -> 'BoxGeneratorBase':
-    raise NotImplementedError()
-
-  def serialize(self, compact: bool = True) -> str:
-    return serialize(self, compact=compact)
-
   def __eq__(self: 'BoxGeneratorBase', other: 'BoxGeneratorBase') -> bool:
     for k, v in self.__dict__.items():
       if k not in other.__dict__:
@@ -121,15 +67,37 @@ class BoxGeneratorBase:
 
     return True
 
+  def to_json(self) -> str:
+    raise NotImplementedError()
 
+
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass(eq=False)
 class BoxGenerator(BoxGeneratorBase):
   """Generates overlapping sub-boxes spanning the input bounding box."""
 
-  def __init__(self,
-               outer_box: bounding_box.BoundingBoxBase,
-               box_size: Sequence[Union[int, float]],
-               box_overlap: Optional[Sequence[Union[int, float]]] = None,
-               back_shift_small_boxes: bool = False):
+  _outer_box: bounding_box.BoundingBoxBase = dataclasses.field(
+      metadata=dataclasses_json.config(field_name='outer_box'))
+  _box_size: np.ndarray = dataclasses.field(
+      metadata=dataclasses_json.config(
+          field_name='box_size',
+          encoder=lambda v: v.tolist(),
+          decoder=np.asarray))
+  _box_overlap: np.ndarray = dataclasses.field(
+      metadata=dataclasses_json.config(
+          field_name='box_overlap',
+          encoder=lambda v: v.tolist(),
+          decoder=np.asarray))
+  _back_shift_small_boxes: bool = dataclasses.field(
+      metadata=dataclasses_json.config(field_name='back_shift_small_boxes'))
+
+  def __init__(
+      self,
+      outer_box: bounding_box.BoundingBoxBase = None,  # pytype: disable=annotation-type-mismatch
+      box_size: Union[Sequence[int], Sequence[float]] = None,  # pytype: disable=annotation-type-mismatch
+      box_overlap: Optional[Sequence[Union[int, float]]] = None,
+      back_shift_small_boxes: bool = False,
+      **kwargs):
     """Initialize a generator.
 
     Args:
@@ -145,12 +113,24 @@ class BoxGenerator(BoxGeneratorBase):
         back edge of the outer_box.  Instead, shift the start of these boxes
         back so that they can maintain sub_box_size.  This means that the boxes
         at the back edge will have more overlap than the rest of the boxes.
+      **kwargs: Support for dataclass
 
     Raises:
       ValueError: If box size is incompatible with outer box rank.
       ValueError: If box overlap is incompatible with outer box rank.
       ValueError: If box size is <= overlap.
     """
+
+    # Support for dataclasses
+    if outer_box is None and '_outer_box' in kwargs:
+      outer_box = kwargs['_outer_box']
+    if box_size is None and '_box_size' in kwargs:
+      box_size = kwargs['_box_size']
+    if box_overlap is None and '_box_overlap' in kwargs:
+      box_overlap = kwargs['_box_overlap']
+    if '_back_shift_small_boxes' in kwargs:
+      back_shift_small_boxes = kwargs['_back_shift_small_boxes']
+
     # normalize box_size
     box_size = list(box_size)
     squeeze = []
@@ -458,27 +438,13 @@ class BoxGenerator(BoxGeneratorBase):
             continue
           yield sub_box
 
-  @property
-  def _spec(self) -> dict[str, Any]:
-    spec = {
-        'outer_box': self._outer_box.spec,
-        'box_size': self.box_size.tolist(),
-        'box_overlap': self.box_overlap.tolist(),
-        'back_shift_small_boxes': self._back_shift_small_boxes,
-    }
-    return spec
-
-  @staticmethod
-  def _from_spec(spec: dict[str, Any]) -> 'BoxGenerator':
-    outer_box = bounding_box.deserialize(spec['outer_box'])
-    return BoxGenerator(outer_box, spec['box_size'], spec['box_overlap'],
-                        spec['back_shift_small_boxes'])
-
 
 GeneratorIndex = TypeVar('GeneratorIndex', bound=int)
 MultiBoxIndex = TypeVar('MultiBoxIndex', bound=int)
 
 
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass
 class MultiBoxGenerator(BoxGeneratorBase):
   """Wrapper around multiple BoxGenerators.
 
@@ -486,10 +452,26 @@ class MultiBoxGenerator(BoxGeneratorBase):
   index.
   """
 
-  generators: Sequence[BoxGenerator]
+  _outer_boxes: list[bounding_box.BoundingBoxBase] = dataclasses.field(
+      metadata=dataclasses_json.config(field_name='outer_boxes'))
+  _box_size: np.ndarray = dataclasses.field(
+      metadata=dataclasses_json.config(
+          field_name='box_size',
+          encoder=lambda v: v.tolist(),
+          decoder=np.asarray))
+  _box_overlap: np.ndarray = dataclasses.field(
+      metadata=dataclasses_json.config(
+          field_name='box_overlap',
+          encoder=lambda v: v.tolist(),
+          decoder=np.asarray))
+  _back_shift_small_boxes: bool = dataclasses.field(
+      metadata=dataclasses_json.config(field_name='back_shift_small_boxes'))
 
-  def __init__(self, outer_boxes: Sequence[bounding_box.BoundingBoxBase], *args,
-               **kwargs):
+  def __init__(
+      self,
+      outer_boxes: Sequence[bounding_box.BoundingBoxBase] = None,  # pytype: disable=annotation-type-mismatch# Support for dataclasses
+      *args,
+      **kwargs):  # pylint: disable=keyword-arg-before-vararg
     """Wrapper around multiple BoxGenerators.
 
     Args:
@@ -497,11 +479,20 @@ class MultiBoxGenerator(BoxGeneratorBase):
       *args: Broadcast to respective generators for input outer_boxes.
       **kwargs: Broadcast to respective generators for input outer_boxes.
     """
+
+    if outer_boxes is None and '_outer_boxes' in kwargs:
+      outer_boxes = kwargs['_outer_boxes']
+
     self.generators = [
         BoxGenerator(outer_box, *args, **kwargs) for outer_box in outer_boxes
     ]
     boxes_per_generators = [c.num_boxes for c in self.generators]
     self.prefix_sums = np.cumsum([0] + boxes_per_generators)
+    first_gen = self.generators[0]
+    self._box_size = first_gen.box_size
+    self._box_overlap = first_gen.box_overlap
+    self._back_shift_small_boxes = first_gen._back_shift_small_boxes
+    self._outer_boxes = list(outer_boxes)
 
   def index_to_generator_index(
       self, multi_box_index: MultiBoxIndex) -> Tuple[GeneratorIndex, BoxIndex]:
@@ -578,39 +569,12 @@ class MultiBoxGenerator(BoxGeneratorBase):
   def box_overlap(self) -> array.ImmutableArray:
     return self.generators[0].box_overlap
 
-  @property
-  def _spec(self) -> dict[str, Any]:
-    first_gen = self.generators[0]
-    spec = {
-        'outer_boxes': [g.outer_box.spec for g in self.generators],
-        'box_size': first_gen.box_size.tolist(),
-        'box_overlap': first_gen.box_overlap.tolist(),
-        'back_shift_small_boxes': first_gen._back_shift_small_boxes,
-    }
-    return spec
 
-  @staticmethod
-  def _from_spec(spec: dict[str, Any]) -> 'MultiBoxGenerator':
-    outer_boxes = [bounding_box.deserialize(b) for b in spec['outer_boxes']]
-    return MultiBoxGenerator(outer_boxes, spec['box_size'], spec['box_overlap'],
-                             spec['back_shift_small_boxes'])
-
-
-def serialize(generator: BoxGeneratorBase, compact: bool = False) -> str:
-  """Serialize a generator object to JSON.
-
-  Args:
-    generator: Target to serialize.
-    compact: Whether the returned JSON should be human readable or compacted
-      onto a single line.
-
-  Returns:
-    Serialized generator as string.
-  """
-  return json.dumps(generator.spec, indent=2 if not compact else None)
-
-
-def deserialize(serialized: Union[str, dict[str, Any]]) -> BoxGeneratorBase:
-  as_dict = serialized if isinstance(serialized,
-                                     dict) else json.loads(serialized)
-  return BoxGeneratorBase.from_spec(as_dict)
+def from_json(as_json: str) -> BoxGeneratorBase:
+  """Deserialize and guess generator type."""
+  as_dict = json.loads(as_json)
+  if 'outer_box' in as_dict:
+    return BoxGenerator.from_dict(as_dict)
+  elif 'outer_boxes' in as_dict:
+    return MultiBoxGenerator.from_dict(as_dict)
+  raise ValueError('Not a known box generator type')

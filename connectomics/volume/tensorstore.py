@@ -46,12 +46,8 @@ class TensorstoreMetadata:
     voxel_size: Voxel size in nm.
     bounding_boxes: Bounding boxes associated with this tensorstore.
   """
-  voxel_size: array.Tuple3f = dataclasses.field(
-      metadata=dataclasses_json.config(decoder=tuple_deserialize))
-  bounding_boxes: list[bounding_box.BoundingBox] = dataclasses.field(
-      metadata=dataclasses_json.config(
-          encoder=lambda bboxes: [b.spec for b in bboxes],
-          decoder=lambda bboxes: [bounding_box.deserialize(b) for b in bboxes]))
+  voxel_size: array.Tuple3f
+  bounding_boxes: list[bounding_box.BoundingBox]
 
   def __post_init__(self):
     # Purely to ensure that voxel_size is a tuple if initialized with a list.

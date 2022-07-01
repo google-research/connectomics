@@ -14,11 +14,11 @@
 # limitations under the License.
 """Tests for connectomics.common.BoundingBox."""
 
-import json
 from absl.testing import absltest
 from connectomics.common import bounding_box
 import numpy as np
 
+Base = bounding_box.BoundingBoxBase
 Box = bounding_box.BoundingBox
 FloatBox = bounding_box.FloatBoundingBox
 
@@ -342,20 +342,64 @@ class GlobalTest(absltest.TestCase):
         Box(start=[0, 1, 2], end=[17, 18, 19]),
         bounding_box.containing(box0, box1, box2, box3, box4))
 
-  def test_serializing(self):
+  def test_dataclass(self):
     box = Box(start=[0, 1, 2], end=[10, 10, 10])
-    expected_json = {
-        'type': 'BoundingBox',
-        'start': [0, 1, 2],
-        'size': [10, 9, 8],
-        'is_border_start': [False, False, False],
-        'is_border_end': [False, False, False]
-    }
-    self.assertNotIn('\n', box.serialize())
-    self.assertIn('\n', box.serialize(compact=False))
+    self.assertEqual(
+        box.to_json(indent=2), """{
+  "start": [
+    0,
+    1,
+    2
+  ],
+  "size": [
+    10,
+    9,
+    8
+  ],
+  "is_border_end": [
+    false,
+    false,
+    false
+  ],
+  "is_border_start": [
+    false,
+    false,
+    false
+  ]
+}""")
+    new_box = Box.from_json(box.to_json())
+    self.assertEqual(box, new_box)
 
-    self.assertEqual(expected_json, json.loads(box.serialize()))
-    self.assertEqual(box, bounding_box.deserialize(box.serialize()))
+    box = FloatBox(start=[0.1, 1.1, 2.1], end=[10.1, 10.1, 10.1])
+    self.assertEqual(
+        box.to_json(indent=2), """{
+  "start": [
+    0.1,
+    1.1,
+    2.1
+  ],
+  "size": [
+    10.0,
+    9.0,
+    8.0
+  ],
+  "is_border_end": [
+    false,
+    false,
+    false
+  ],
+  "is_border_start": [
+    false,
+    false,
+    false
+  ]
+}""")
+    new_box = FloatBox.from_json(box.to_json())
+    self.assertEqual(box, new_box)
+
+    # Ensure it can work with Base
+    new_box = Base.from_json(box.to_json())
+    self.assertEqual(box, new_box)
 
 
 if __name__ == '__main__':

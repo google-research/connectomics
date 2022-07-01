@@ -14,12 +14,11 @@
 # limitations under the License.
 """Tests for connectomics.common.box_generator."""
 
-import json
-
 from absl.testing import absltest
 from connectomics.common import bounding_box
 from connectomics.common import box_generator as m
 import numpy as np
+import numpy.testing as npt
 
 # Alias to make the test more concise
 Box = bounding_box.BoundingBox
@@ -312,6 +311,58 @@ class BoxGeneratorTest(absltest.TestCase):
         Box(start=(0, 384, 768), size=size)
     ])
 
+  def test_dataclass(self):
+    generator = m.BoxGenerator(
+        Box(start=(0, 0, 0), size=(100, 100, 100)),
+        box_size=(10, 10, 10),
+        box_overlap=(0, 0, 0))
+    self.assertEqual(
+        generator.to_json(indent=2), """{
+  "outer_box": {
+    "start": [
+      0,
+      0,
+      0
+    ],
+    "size": [
+      100,
+      100,
+      100
+    ],
+    "is_border_end": [
+      false,
+      false,
+      false
+    ],
+    "is_border_start": [
+      false,
+      false,
+      false
+    ]
+  },
+  "box_size": [
+    10,
+    10,
+    10
+  ],
+  "box_overlap": [
+    0,
+    0,
+    0
+  ],
+  "back_shift_small_boxes": false
+}""")
+    new_gen = m.BoxGenerator.from_json(generator.to_json())
+    self.assertEqual(generator.outer_box, new_gen.outer_box)
+    self.assertEqual(generator.output, new_gen.output)
+    npt.assert_array_equal(generator.box_overlap, new_gen.box_overlap)
+    npt.assert_array_equal(generator.box_size, new_gen.box_size)
+    npt.assert_array_equal(generator.box_stride, new_gen.box_stride)
+    self.assertEqual(generator.num_boxes, new_gen.num_boxes)
+    npt.assert_array_equal(generator.squeeze, new_gen.squeeze)
+    npt.assert_array_equal(generator.start, new_gen.start)
+    npt.assert_array_equal(generator.boxes_per_dim, new_gen.boxes_per_dim)
+
 
 class MultiBoxGeneratorTest(absltest.TestCase):
 
@@ -334,101 +385,76 @@ class MultiBoxGeneratorTest(absltest.TestCase):
     self.assertEqual([multi_generator.generate(i)[1] for i in range(8, 16)],
                      list(multi_generator.generators[1].boxes))
 
-
-class GlobalTest(absltest.TestCase):
-
-  def test_serializing_box_generator(self):
-    generator = m.BoxGenerator(
-        Box(start=(0, 0, 0), size=(100, 100, 100)),
-        box_size=(10, 10, 10),
-        box_overlap=(0, 0, 0))
-
-    expected_spec = {
-        'type': 'BoxGenerator',
-        'outer_box': {
-            'type': 'BoundingBox',
-            'start': [0, 0, 0],
-            'size': [100, 100, 100],
-            'is_border_start': [False, False, False],
-            'is_border_end': [False, False, False]
-        },
-        'box_size': [10, 10, 10],
-        'box_overlap': [0, 0, 0],
-        'back_shift_small_boxes': False
-    }
-    self.assertEqual(expected_spec, generator.spec)
-    self.assertEqual(expected_spec, json.loads(generator.serialize()))
-    self.assertEqual(generator, m.deserialize(generator.serialize()))
-
-  def test_serializing_multi_box_generator(self):
-    box1 = Box(start=(0, 0, 0), size=(20, 20, 10))
-    box2 = Box(start=(2, 44, 111), size=(120, 120, 910))
+  def test_dataclass(self):
+    outer_box = Box(start=(0, 0, 0), size=(20, 20, 10))
     sub_box_size = (15, 13, 6)
     overlap = (1, 2, 2)
-    generator = m.MultiBoxGenerator([box1, box2], sub_box_size, overlap)
-    expected_spec = {
-        'back_shift_small_boxes': False,
-        'box_overlap': [1, 2, 2],
-        'box_size': [15, 13, 6],
-        'outer_boxes': [{
-            'type': 'BoundingBox',
-            'start': [0, 0, 0],
-            'size': [20, 20, 10],
-            'is_border_start': [False, False, False],
-            'is_border_end': [False, False, False]
-        }, {
-            'type': 'BoundingBox',
-            'start': [2, 44, 111],
-            'size': [120, 120, 910],
-            'is_border_start': [False, False, False],
-            'is_border_end': [False, False, False]
-        }],
-        'type': 'MultiBoxGenerator'
+    multi_generator = m.MultiBoxGenerator([outer_box, outer_box], sub_box_size,
+                                          overlap)
+    self.assertEqual(
+        multi_generator.to_json(indent=2), """{
+  "outer_boxes": [
+    {
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        20,
+        20,
+        10
+      ],
+      "is_border_end": [
+        false,
+        false,
+        false
+      ],
+      "is_border_start": [
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "start": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        20,
+        20,
+        10
+      ],
+      "is_border_end": [
+        false,
+        false,
+        false
+      ],
+      "is_border_start": [
+        false,
+        false,
+        false
+      ]
     }
-    self.assertEqual(expected_spec, generator.spec)
-    self.assertEqual(expected_spec, json.loads(generator.serialize()))
-    self.assertEqual(generator, m.deserialize(generator.serialize()))
-
-  def test_inferring_type(self):
-    spec = {
-        'back_shift_small_boxes':
-            False,
-        'box_overlap': [1, 2, 2],
-        'box_size': [15, 13, 6],
-        'outer_boxes': [{
-            'type': 'BoundingBox',
-            'start': [0, 0, 0],
-            'size': [20, 20, 10],
-            'is_border_start': [False, False, False],
-            'is_border_end': [False, False, False]
-        }, {
-            'type': 'BoundingBox',
-            'start': [2, 44, 111],
-            'size': [120, 120, 910],
-            'is_border_start': [False, False, False],
-            'is_border_end': [False, False, False]
-        }],
-    }
-    generator = m.deserialize(spec)
-    self.assertIsInstance(generator, m.MultiBoxGenerator)
-
-    spec = {
-        'back_shift_small_boxes': False,
-        'box_overlap': [1, 2, 2],
-        'box_size': [15, 13, 6],
-        'outer_box': {
-            'type': 'BoundingBox',
-            'start': [0, 0, 0],
-            'size': [20, 20, 10],
-            'is_border_start': [False, False, False],
-            'is_border_end': [False, False, False]
-        },
-    }
-    generator = m.deserialize(spec)
-    self.assertIsInstance(generator, m.BoxGenerator)
-
-    with self.assertRaises(ValueError):
-      m.deserialize({})
+  ],
+  "box_size": [
+    15,
+    13,
+    6
+  ],
+  "box_overlap": [
+    1,
+    2,
+    2
+  ],
+  "back_shift_small_boxes": false
+}""")
+    new_mbg = m.MultiBoxGenerator.from_json(multi_generator.to_json())
+    self.assertEqual(multi_generator.num_boxes, new_mbg.num_boxes)
+    npt.assert_array_equal(multi_generator.box_size, new_mbg.box_size)
+    npt.assert_array_equal(multi_generator.box_overlap, new_mbg.box_overlap)
 
 
 if __name__ == '__main__':

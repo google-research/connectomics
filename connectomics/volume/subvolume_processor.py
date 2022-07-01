@@ -58,9 +58,7 @@ class ProcessSubvolumeRequest:
 
   # TODO(timblakely): Make bounding boxes a proper dataclass so these
   # encoder/decoders are no longer necessary. Box to process.
-  box: bounding_box.BoundingBox = dataclasses.field(
-      metadata=dataclasses_json.config(
-          encoder=lambda b: b.spec, decoder=bounding_box.deserialize))
+  box: bounding_box.BoundingBox
 
 
 @dataclasses_json.dataclass_json
@@ -81,10 +79,7 @@ class ProcessVolumeConfig:
   output_dir: str
 
   # Bounding boxes to process.
-  bounding_boxes: list[bounding_box.BoundingBox] = dataclasses.field(
-      metadata=dataclasses_json.config(
-          encoder=lambda bboxes: [b.spec for b in bboxes],
-          decoder=lambda bboxes: [bounding_box.deserialize(b) for b in bboxes]))
+  bounding_boxes: list[bounding_box.BoundingBox]
 
   # Processor configuration to apply.
   processor: SubvolumeProcessorConfig

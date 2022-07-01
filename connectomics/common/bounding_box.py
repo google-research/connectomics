@@ -15,11 +15,11 @@
 """Defines the BoundingBox dataclass to describe bounding boxes."""
 
 import dataclasses
-import json
-from typing import Any, Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
+import typing
+from typing import Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
 
-from absl import logging
 from connectomics.common import array
+import dataclasses_json
 import numpy as np
 
 T = TypeVar('T', int, float)
@@ -28,12 +28,50 @@ FloatSequence = Union[float, Sequence[float]]
 BoolSequence = Union[bool, Sequence[bool]]
 
 
-@dataclasses.dataclass
+def _is_intlike(v) -> bool:
+  return isinstance(v,
+                    (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32,
+                     np.int64, np.uint8, np.uint16, np.uint32, np.uint64, int))
+
+
+def _is_floatlike(v) -> bool:
+  return isinstance(v, (np.float_, np.float16, np.float32, np.float64, float))
+
+
+def _is_boollike(v) -> bool:
+  return isinstance(v, (bool, np.bool_))
+
+
+def from_np_type(v):
+  if _is_intlike(v):
+    return int(v)
+  elif _is_floatlike(v):
+    return float(v)
+  elif _is_boollike(v):
+    return bool(v)
+
+  raise ValueError(f'Unexpected limit type: {type(v)}')
+
+
+def limit_encoder(v):
+  return [from_np_type(x) for x in v]
+
+
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass(repr=False, eq=False)
 class BoundingBoxBase(Generic[T]):
   """BoundingBox encapsulates start/end coordinate pairs of the same length."""
-  _start: Tuple[T, ...]
-  _end: Tuple[T, ...]
-  _size: Tuple[T, ...]
+  _start: Tuple[T, ...] = dataclasses.field(
+      metadata=dataclasses_json.config(
+          field_name='start', encoder=limit_encoder))
+  _size: Tuple[T, ...] = dataclasses.field(
+      metadata=dataclasses_json.config(
+          field_name='size', encoder=limit_encoder))
+  # TODO(timblakely): Move these internal.
+  is_border_end: Optional[Tuple[bool, ...]] = dataclasses.field(
+      default=None, metadata=dataclasses_json.config(encoder=limit_encoder))
+  is_border_start: Optional[Tuple[bool, ...]] = dataclasses.field(
+      default=None, metadata=dataclasses_json.config(encoder=limit_encoder))
 
   def __init__(
       self,
@@ -43,7 +81,8 @@ class BoundingBoxBase(Generic[T]):
       # TODO(timblakely): Move these parameters into the limited upstream
       # usage, as it's not exaclty specific to BoundingBox
       is_border_start: Optional[BoolSequence] = None,
-      is_border_end: Optional[BoolSequence] = None):
+      is_border_end: Optional[BoolSequence] = None,
+      **kwargs):
     """Initialize a BoundingBox from explicit bounds.
 
     Exactly two of start, size, and end must be specified.
@@ -60,10 +99,15 @@ class BoundingBoxBase(Generic[T]):
       is_border_end: (xyz) Optional N-D element bool sequence specifying whether
         this box is adjacent to the end of the containing volume along the
         respective dimension
+      **kwargs: Fields used during dataclass initialization.
 
     Raises:
       ValueError: on bad inputs.
     """
+    if start is None and '_start' in kwargs:
+      start = kwargs['_start']
+    if size is None and '_size' in kwargs:
+      size = kwargs['_size']
     if (end is not None) + (start is not None) + (size is not None) != 2:
       raise ValueError('Exactly two of start, end, and size must be specified')
     if not array.is_arraylike(start) and not array.is_arraylike(end):
@@ -99,17 +143,21 @@ class BoundingBoxBase(Generic[T]):
       if len(is_border_start) != self.rank:
         raise ValueError(
             f'is_border_start needs to have exactly {self.rank} items')
-      self.is_border_start = np.asarray(is_border_start)
+      self.is_border_start = typing.cast(tuple[bool, ...],
+                                         np.asarray(is_border_start))
     else:
-      self.is_border_start = np.zeros(self.rank, dtype=bool)
+      self.is_border_start = typing.cast(tuple[bool, ...],
+                                         np.zeros(self.rank, dtype=bool))
 
     if is_border_end is not None:
       if len(is_border_end) != self.rank:
         raise ValueError(
             f'is_border_end needs to have exactly {self.rank} items')
-      self.is_border_end = np.asarray(is_border_end)
+      self.is_border_end = typing.cast(tuple[bool, ...],
+                                       np.asarray(is_border_end))
     else:
-      self.is_border_end = np.zeros(self.rank, dtype=bool)
+      self.is_border_end = typing.cast(tuple[bool, ...],
+                                       np.zeros(self.rank, dtype=bool))
 
   def __eq__(self: S, other: S) -> bool:
     for k, v in self.__dict__.items():
@@ -126,10 +174,30 @@ class BoundingBoxBase(Generic[T]):
     return True
 
   def _tupleize(self: S, seq: Sequence[float]) -> Tuple[T, ...]:
-    raise NotImplementedError()
+    """Convert sequence to a correctly-typed tuple.
+
+    Base classes should override this if a specific type is desired.
+
+    Args:
+      seq: Sequence of numbers to convert.
+
+    Returns:
+      Tuple containing correctly typed values.
+    """
+    return tuple(seq)
 
   def _as_ndarray(self: S, seq: Sequence[float]) -> np.ndarray:
-    raise NotImplementedError()
+    """Convert sequence to a correctly-typed ndarray.
+
+    Base classes should override this if a specific type is desired.
+
+    Args:
+      seq: Sequence of numbers to convert.
+
+    Returns:
+      Numpy array containing correctly typed values.
+    """
+    return np.asarray(seq)
 
   def _as_immutablearray(self: S, seq: Sequence[float]) -> array.ImmutableArray:
     return array.ImmutableArray(self._as_ndarray(seq))
@@ -378,56 +446,6 @@ class BoundingBoxBase(Generic[T]):
     return (f'BoundingBox(start={self.start.tolist()}, '
             f'end={self.end.tolist()}, size={self.size.tolist()})')
 
-  @property
-  def spec(self) -> dict[str, Any]:
-    spec = self._spec
-    spec['type'] = self.__class__.__name__
-    return spec
-
-  @property
-  def _spec(self) -> dict[str, Any]:
-    spec = {
-        'start': self.start.tolist(),
-        'size': self.size.tolist(),
-        'is_border_start': self.is_border_start.tolist(),
-        'is_border_end': self.is_border_end.tolist(),
-    }
-    return spec
-
-  @staticmethod
-  def from_spec(spec: dict[str, Any]) -> 'BoundingBoxBase':
-    """Create a new instance from a spec.
-
-    If the 'type' field is not set on the spec, the bounding box is assumed to
-    be a BoundingBox instance (integer-based).
-
-    Args:
-      spec: Dictionary of values that define a bounding box. Refer to the
-        respective implementations for required fields.
-
-    Returns:
-      A new bounding box.
-
-    Raises:
-      ValueError: If the type is unknown.
-    """
-    if 'type' in spec:
-      bbox_type = spec['type']
-      del spec['type']
-      if bbox_type not in globals():
-        raise ValueError(f'Unknown bounding box type: {bbox_type}')
-      bbox_ctor = globals()[bbox_type]
-    else:
-      logging.log_first_n(
-          logging.WARNING,
-          'Bounding box type not set, assuming integer BoundingBox',
-          100)
-      bbox_ctor = BoundingBox
-    return bbox_ctor(**spec)
-
-  def serialize(self, compact: bool = True) -> str:
-    return serialize(self, compact=compact)
-
 
 class BoundingBox(BoundingBoxBase[int]):
 
@@ -471,6 +489,10 @@ def intersections(
   if isinstance(other_box_or_boxes, BoundingBoxBase):
     other_box_or_boxes = [other_box_or_boxes]
 
+  # Make PyType happy
+  first_box_or_boxes = typing.cast(list[S], first_box_or_boxes)
+  other_box_or_boxes = typing.cast(list[S], other_box_or_boxes)
+
   ret = []
   for box0 in first_box_or_boxes:
     for box1 in other_box_or_boxes:
@@ -501,21 +523,10 @@ def containing(*boxes: S) -> S:
   return box.encompass(*boxes[1:])
 
 
-def serialize(box: BoundingBoxBase, compact: bool = True) -> str:
-  """Serialize a bounding box to JSON.
-
-  Args:
-    box: Target to serialize.
-    compact: Whether the returned JSON should be human readable or compacted
-      onto a single line.
-
-  Returns:
-    Serialized bounding box as string.
-  """
-  return json.dumps(box.spec, indent=2 if not compact else None)
-
-
-def deserialize(serialized: Union[str, dict[str, Any]]) -> BoundingBoxBase:
-  as_dict = serialized if isinstance(serialized,
-                                     dict) else json.loads(serialized)
-  return BoundingBoxBase.from_spec(as_dict)
+def from_json(as_json: str) -> BoundingBoxBase:
+  """Deserialize and guess bounding box type."""
+  bbox = BoundingBoxBase.from_json(as_json)
+  if any([_is_floatlike(v) for v in bbox.start] +
+         [_is_floatlike(v) for v in bbox.size]):
+    return FloatBoundingBox(bbox.start, bbox.size)
+  return BoundingBox(bbox.start, bbox.size)
