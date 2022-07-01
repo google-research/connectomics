@@ -539,7 +539,7 @@ class MultiBoxGenerator(BoxGeneratorBase):
       The box at the given index.
     """
     generator_index, index = self.index_to_generator_index(multi_box_index)
-    return self.generators[generator_index].index_to_cropped_box(index)
+    return self.generators[generator_index].index_to_cropped_box(index)  # pytype: disable=bad-return-type  # dynamic-method-lookup
 
   @property
   def num_boxes(self) -> int:

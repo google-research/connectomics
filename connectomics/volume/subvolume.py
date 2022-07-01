@@ -66,7 +66,7 @@ class AbsoluteSubvolumeIndexer:
       new_slice = slice(slc.start - self._subvol.start[2 - i],
                         slc.stop - self._subvol.start[2 - i])
       adjusted.append(new_slice)
-    return self._subvol[adjusted]
+    return self._subvol[adjusted]  # pytype: disable=unsupported-operands  # dynamic-method-lookup
 
 
 class Subvolume:
