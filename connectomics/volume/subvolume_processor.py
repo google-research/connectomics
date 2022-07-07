@@ -85,11 +85,13 @@ class ProcessVolumeConfig:
   processor: SubvolumeProcessorConfig
 
   # Size of each subvolume to process.
-  subvolume_size: array.Tuple3i = array.TupleField
+  subvolume_size: array.Tuple3i = dataclasses.field(
+      metadata=dataclasses_json.config(decoder=tuple))
 
   # Amount of overlap between processed subvolumes. This is independent of any
   # additional context required by individual processors.
-  overlap: array.Tuple3i = array.TupleField
+  overlap: array.Tuple3i = dataclasses.field(
+      metadata=dataclasses_json.config(decoder=tuple))
 
   # TODO(timblakely): Support back shifting edge boxes. TODO(timblakely): Support
   # expanding underlying tensorstore bounds so that end chunks can be fully
