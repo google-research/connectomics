@@ -14,11 +14,16 @@
 # limitations under the License.
 """Simple NoOp subvolume processor."""
 
+from typing import Union
+
+from connectomics.volume import subvolume
 from connectomics.volume import subvolume_processor
 
 
 class NoOpProcessor(subvolume_processor.SubvolumeProcessor):
   """No-op processor for testing."""
 
-  def process(self, box, input_ndarray):
-    return box, input_ndarray
+  def process(
+      self, subvol: subvolume.Subvolume
+  ) -> Union[subvolume.Subvolume, list[subvolume.Subvolume]]:
+    return subvol

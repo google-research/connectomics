@@ -53,7 +53,7 @@ class SubvolumeProcessorTest(absltest.TestCase):
   def test_process(self):
     p = Processor()
     with self.assertRaises(NotImplementedError):
-      p.process(_, _)
+      p.process(_)
 
   def test_subvolume_size(self):
     p = Processor()
@@ -113,16 +113,16 @@ class SubvolumeProcessorTest(absltest.TestCase):
       p.crop_box_and_data(box, data)
 
     p.set_effective_subvol_and_overlap(box.size, [0, 0, 0])
-    new_box, new_data = p.crop_box_and_data(box, data)
-    self.assertEqual(box, new_box)
-    self.assertSequenceEqual([10, 10, 10, 10], new_data.shape)
-    self.assertTrue(np.all(data == new_data))
+    subvol = p.crop_box_and_data(box, data)
+    self.assertEqual(box, subvol.bbox)
+    self.assertSequenceEqual([10, 10, 10, 10], subvol.data.shape)
+    self.assertTrue(np.all(data == subvol.data))
 
     p.set_effective_subvol_and_overlap(box.size, [4, 4, 4])
-    new_box, new_data = p.crop_box_and_data(box, data)
-    self.assertEqual(BBox([12, 13, 14], [6, 6, 6]), new_box)
-    self.assertSequenceEqual([10, 6, 6, 6], new_data.shape)
-    self.assertTrue(np.all(data[:, 2:8, 2:8, 2:8] == new_data))
+    subvol = p.crop_box_and_data(box, data)
+    self.assertEqual(BBox([12, 13, 14], [6, 6, 6]), subvol.bbox)
+    self.assertSequenceEqual([10, 6, 6, 6], subvol.data.shape)
+    self.assertTrue(np.all(data[:, 2:8, 2:8, 2:8] == subvol.data))
 
 
 if __name__ == '__main__':

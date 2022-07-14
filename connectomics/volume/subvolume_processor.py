@@ -22,15 +22,16 @@ from typing import Any, Tuple, Optional, Union
 from connectomics.common import array
 from connectomics.common import bounding_box
 from connectomics.volume import descriptor
+from connectomics.volume import subvolume
 import dataclasses_json
 import numpy as np
 
-SuggestedXyz = collections.namedtuple('SuggestedXyz', 'x y z')
-XyzTuple = array.Tuple3i
-TupleOrSuggestedXyz = Union[XyzTuple, SuggestedXyz]  # pylint: disable=invalid-name
-
 ImmutableArray = array.ImmutableArray
 MutableArray = array.MutableArray
+Subvolume = subvolume.Subvolume
+SuggestedXyz = collections.namedtuple('SuggestedXyz', 'x y z')
+TupleOrSuggestedXyz = Union['XyzTuple', SuggestedXyz]  # pylint: disable=invalid-name
+XyzTuple = array.Tuple3i
 
 
 @dataclasses_json.dataclass_json
@@ -156,19 +157,16 @@ class SubvolumeProcessor:
     return input_channels
 
   def process(
-      self, box: bounding_box.BoundingBoxBase, input_ndarray: MutableArray
-  ) -> Tuple[bounding_box.BoundingBoxBase, MutableArray]:
+      self, subvol: subvolume.Subvolume
+  ) -> Union[subvolume.Subvolume, list[subvolume.Subvolume]]:
     """Processes the input subvolume.
 
     Args:
-      box: The bounding box of the input_ndarray in the global coordinate space
-        of the containing volume.
-      input_ndarray: 4d Numpy array with data for the input subvolume.
+      subvol: Subvolume to process.
 
     Returns:
-      The box and input_ndarray, processed appropriately.  If self.context is
-      > 0, it is expected that the returned box and input_ndarray will be
-      smaller than the input by the context amount.
+      The processed subvolume. If self.context is > 0, it is expected that the
+      returned subvolume will be smaller than the input by the context amount.
     """
     raise NotImplementedError
 
@@ -239,7 +237,7 @@ class SubvolumeProcessor:
       box: bounding_box.BoundingBoxBase,
       # TODO(timblakely): Strongly type this as ArrayCZYX
       data: np.ndarray
-  ) -> Tuple[bounding_box.BoundingBoxBase, np.ndarray]:
+  ) -> Subvolume:
     """Crop data front/back by self.context.
 
     Args:
@@ -253,4 +251,4 @@ class SubvolumeProcessor:
     front, back = self._context_for_box(box)
     fx, fy, fz = front
     bx, by, bz = np.array(data.shape[:0:-1]) - back
-    return cropped_box, data[:, fz:bz, fy:by, fx:bx]
+    return Subvolume(data[:, fz:bz, fy:by, fx:bx], cropped_box)
