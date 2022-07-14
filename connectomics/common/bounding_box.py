@@ -19,6 +19,7 @@ import typing
 from typing import Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
 
 from connectomics.common import array
+from connectomics.common import utils
 import dataclasses_json
 import numpy as np
 
@@ -28,33 +29,8 @@ FloatSequence = Union[float, Sequence[float]]
 BoolSequence = Union[bool, Sequence[bool]]
 
 
-def _is_intlike(v) -> bool:
-  return isinstance(v,
-                    (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32,
-                     np.int64, np.uint8, np.uint16, np.uint32, np.uint64, int))
-
-
-def _is_floatlike(v) -> bool:
-  return isinstance(v, (np.float_, np.float16, np.float32, np.float64, float))
-
-
-def _is_boollike(v) -> bool:
-  return isinstance(v, (bool, np.bool_))
-
-
-def from_np_type(v):
-  if _is_intlike(v):
-    return int(v)
-  elif _is_floatlike(v):
-    return float(v)
-  elif _is_boollike(v):
-    return bool(v)
-
-  raise ValueError(f'Unexpected limit type: {type(v)}')
-
-
 def limit_encoder(v):
-  return [from_np_type(x) for x in v]
+  return [utils.from_np_type(x) for x in v]
 
 
 @dataclasses_json.dataclass_json
@@ -526,7 +502,7 @@ def containing(*boxes: S) -> S:
 def from_json(as_json: str) -> BoundingBoxBase:
   """Deserialize and guess bounding box type."""
   bbox = BoundingBoxBase.from_json(as_json)
-  if any([_is_floatlike(v) for v in bbox.start] +
-         [_is_floatlike(v) for v in bbox.size]):
+  if any([utils.is_floatlike(v) for v in bbox.start] +
+         [utils.is_floatlike(v) for v in bbox.size]):
     return FloatBoundingBox(bbox.start, bbox.size)
   return BoundingBox(bbox.start, bbox.size)

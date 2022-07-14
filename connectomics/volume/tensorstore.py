@@ -15,7 +15,6 @@
 """A Tensorstore-backed Volume."""
 
 import dataclasses
-import functools
 from typing import Any, Optional, Sequence, Union
 
 from connectomics.common import array
@@ -34,12 +33,8 @@ def tuple_deserialize(v: Sequence[Union[int, float]]) -> array.Tuple3f:
   return tuple(v)
 
 
-TensorstoreSpec = Union[str, dict[str, Any]]
-
-
-@dataclasses_json.dataclass_json
-@functools.partial(dataclasses.dataclass, eq=True)
-class TensorstoreMetadata:
+@dataclasses.dataclass(eq=True)
+class TensorstoreMetadata(dataclasses_json.DataClassJsonMixin):
   """Additional volumetric metadata associated with TensorStore volumes.
 
   Attributes:
@@ -54,10 +49,9 @@ class TensorstoreMetadata:
     self.voxel_size = tuple(self.voxel_size)
 
 
-@dataclasses_json.dataclass_json
-@functools.partial(dataclasses.dataclass, eq=True)
-class TensorstoreConfig:
-  spec: TensorstoreSpec
+@dataclasses.dataclass(eq=True)
+class TensorstoreConfig(dataclasses_json.DataClassJsonMixin):
+  spec: dict[str, Any]
   metadata: Optional[TensorstoreMetadata] = dataclasses.field(
       default=None,
       metadata=dataclasses_json.config(
@@ -71,6 +65,7 @@ class TensorstoreVolume(base.BaseVolume):
   _config: TensorstoreConfig
 
   def __init__(self, config: TensorstoreConfig):
+    assert config.metadata
     if not config.metadata.bounding_boxes:
       raise ValueError('Config must have at least one bounding box')
     if not config.metadata.voxel_size or any(
@@ -98,6 +93,7 @@ class TensorstoreVolume(base.BaseVolume):
 
   @property
   def voxel_size(self) -> array.Tuple3f:
+    assert self._config.metadata
     return self._config.metadata.voxel_size
 
   @property
@@ -114,10 +110,12 @@ class TensorstoreVolume(base.BaseVolume):
 
   @property
   def bounding_boxes(self) -> list[bounding_box.BoundingBox]:
+    assert self._config.metadata
     return self._config.metadata.bounding_boxes
 
   @property
   def metadata(self) -> TensorstoreMetadata:
+    assert self._config.metadata
     return self._config.metadata
 
   def write_slices(self, slices: array.CanonicalSlice, value: np.ndarray):
@@ -129,8 +127,7 @@ class TensorstoreVolume(base.BaseVolume):
 class TensorstoreArrayVolume(TensorstoreVolume):
   """TensorStore volume using existing, in-memory arrays."""
 
-  def __init__(self, data: np.ndarray, metadata: Union[str,
-                                                       TensorstoreMetadata]):
+  def __init__(self, data: np.ndarray, metadata: TensorstoreMetadata):
     config = TensorstoreConfig(
         spec={
             'driver': 'array',

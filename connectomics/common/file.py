@@ -17,7 +17,7 @@
 import functools
 import json
 import typing
-from typing import Any, Callable, Type, TypeVar, Union
+from typing import Any, Callable, TypeVar, Union
 
 import dataclasses_json
 
@@ -46,9 +46,8 @@ NotFoundError = tf.errors.NotFoundError
 T = TypeVar('T', bound=dataclasses_json.DataClassJsonMixin)
 
 
-def load_dataclass(
-    constructor: type[T], v: Union[str, dict[str, Any], Type[T],
-                                   None]) -> Union[T, None]:
+def load_dataclass(constructor: type[T], v: Union[str, dict[str, Any], T,
+                                                  None]) -> Union[T, None]:
   """Load a dataclass from a serialized instance, file path, or dict.
 
   Args:
@@ -59,7 +58,7 @@ def load_dataclass(
     New dataclass instance.
   """
   if isinstance(v, type(constructor)):
-    return typing.cast(type[T], v)
+    return typing.cast(T, v)
   elif v is None:
     return v
   elif isinstance(v, str):

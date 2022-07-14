@@ -12,18 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Simple NoOp subvolume processor."""
+"""Re-export of all standard processors."""
 
-from typing import Union
-
-from connectomics.volume import subvolume
-from connectomics.volume import subvolume_processor
-
-
-class NoOpProcessor(subvolume_processor.SubvolumeProcessor):
-  """No-op processor for testing."""
-
-  def process(
-      self, subvol: subvolume.Subvolume
-  ) -> Union[subvolume.Subvolume, list[subvolume.Subvolume]]:
-    return subvol
+from connectomics.volume.processor.noop import *

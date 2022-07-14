@@ -44,7 +44,7 @@ class SubvolumeProcessorTest(absltest.TestCase):
 
   def test_pixelsize(self):
     p = Processor()
-    self.assertEqual([8, 9, 33], p.pixelsize([8, 9, 33]))
+    self.assertSameElements([8, 9, 33], p.pixelsize([8, 9, 33]))
 
   def test_num_channels(self):
     p = Processor()
@@ -78,8 +78,8 @@ class SubvolumeProcessorTest(absltest.TestCase):
     box = BBox([10, 11, 12], [4, 4, 4])
 
     # Assert that if we don't set the effective subvol and overlap, the base
-    # class errors with a TypeError due to _context not being initialized.
-    with self.assertRaises(TypeError):
+    # class errors with a AttributeError due to _context not being initialized.
+    with self.assertRaises(AttributeError):
       p.crop_box(box)
 
     # No overlap case, same size
@@ -108,8 +108,8 @@ class SubvolumeProcessorTest(absltest.TestCase):
     data = np.ones([10] * 4).cumsum(axis=0)
 
     # Assert that if we don't set the effective subvol and overlap, the base
-    # class errors with a TypeError due to _context not being initialized.
-    with self.assertRaises(TypeError):
+    # class errors with a AttributeError due to _context not being initialized.
+    with self.assertRaises(AttributeError):
       p.crop_box_and_data(box, data)
 
     p.set_effective_subvol_and_overlap(box.size, [0, 0, 0])

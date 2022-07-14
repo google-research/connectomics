@@ -99,7 +99,7 @@ class DescriptorTest(absltest.TestCase):
         }
     }
     metadata = tsv.TensorstoreMetadata(
-        [8, 8, 33],
+        (8, 8, 33),
         [bounding_box.BoundingBox(start=[0, 0, 0], size=[1000, 1000, 1000])])
 
     expected_desc = tsv.TensorstoreConfig(spec, metadata)
@@ -126,7 +126,7 @@ class DescriptorTest(absltest.TestCase):
         }
     }
     expected_metadata = tsv.TensorstoreMetadata(
-        [8, 8, 33],
+        (8, 8, 33),
         [bounding_box.BoundingBox(start=[0, 0, 0], size=[1000, 1000, 1000])])
 
     tmp_metadata_file = os.path.join(FLAGS.test_tmpdir, 'metadata.json')
@@ -135,7 +135,7 @@ class DescriptorTest(absltest.TestCase):
 
     original_desc = descriptor.VolumeDescriptor(
         decorator_specs=[],
-        tensorstore_config=tsv.TensorstoreConfig(
+        tensorstore_config=tsv.TensorstoreConfig(  # pytype: disable=wrong-arg-types
             spec=spec, metadata=tmp_metadata_file))
 
     desc = descriptor.VolumeDescriptor.from_json(original_desc.to_json())
@@ -155,7 +155,7 @@ class DescriptorTest(absltest.TestCase):
         }
     }
     expected_metadata = tsv.TensorstoreMetadata(
-        [8, 8, 33],
+        (8, 8, 33),
         [bounding_box.BoundingBox(start=[0, 0, 0], size=[1000, 1000, 1000])])
 
     tmp_metadata_file = os.path.join(FLAGS.test_tmpdir, 'metadata.json')
@@ -163,12 +163,12 @@ class DescriptorTest(absltest.TestCase):
       f.write(expected_metadata.to_json())
 
     tmp_config_file = os.path.join(FLAGS.test_tmpdir, 'config.json')
-    intermediate_config = tsv.TensorstoreConfig(
+    intermediate_config = tsv.TensorstoreConfig(  # pytype: disable=wrong-arg-types
         spec=spec, metadata=tmp_metadata_file)
     with open(tmp_config_file, 'w') as f:
       f.write(intermediate_config.to_json())
 
-    original_desc = descriptor.VolumeDescriptor(
+    original_desc = descriptor.VolumeDescriptor(  # pytype: disable=wrong-arg-types
         decorator_specs=[], tensorstore_config=tmp_config_file)
 
     desc = descriptor.VolumeDescriptor.from_json(original_desc.to_json())

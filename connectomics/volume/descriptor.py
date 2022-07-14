@@ -15,7 +15,6 @@
 """Implementation of VolumeDescriptor."""
 
 import dataclasses
-import functools
 import typing
 from typing import Optional, Union
 
@@ -26,9 +25,8 @@ from connectomics.volume import tensorstore as tsv
 import dataclasses_json
 
 
-@dataclasses_json.dataclass_json
-@functools.partial(dataclasses.dataclass, frozen=True, eq=True)
-class VolumeDescriptor:
+@dataclasses.dataclass(frozen=True, eq=True)
+class VolumeDescriptor(dataclasses_json.DataClassJsonMixin):
   """De/Serializable description of a volume."""
 
   # List of python dicts of specs to decorate the volume via
@@ -52,12 +50,18 @@ class VolumeDescriptor:
 
 
 def load_descriptor(spec: Union[str, VolumeDescriptor]) -> VolumeDescriptor:
-  return file.load_dataclass(VolumeDescriptor, spec)
+  desc = file.load_dataclass(VolumeDescriptor, spec)
+  if desc is None:
+    raise ValueError(f'Could not load descriptor: {spec}')
+  return desc
 
 
 def load_ts_config(
     spec: Union[str, tsv.TensorstoreConfig]) -> tsv.TensorstoreConfig:
-  return file.load_dataclass(tsv.TensorstoreConfig, spec)
+  config = file.load_dataclass(tsv.TensorstoreConfig, spec)
+  if config is None:
+    raise ValueError(f'Could not load descriptor: {spec}')
+  return config
 
 
 def open_descriptor(spec: Union[str, VolumeDescriptor]) -> base.BaseVolume:

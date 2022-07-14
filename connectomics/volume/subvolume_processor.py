@@ -17,6 +17,7 @@
 import collections
 import dataclasses
 import enum
+import importlib
 from typing import Any, Tuple, Optional, Union
 
 from connectomics.common import array
@@ -34,37 +35,21 @@ TupleOrSuggestedXyz = Union['XyzTuple', SuggestedXyz]  # pylint: disable=invalid
 XyzTuple = array.Tuple3i
 
 
-@dataclasses_json.dataclass_json
 @dataclasses.dataclass
-class SubvolumeProcessorConfig:
+class SubvolumeProcessorConfig(dataclasses_json.DataClassJsonMixin):
   """Configuration for a given subvolume processor."""
-  # Name of class exposed in connectomics.volume.processors.
+  # Name of class exposed in module_search_path.
   name: str
 
   # Arguments to SubvolumeProcessor, passed in as kwargs.
   args: Optional[dict[str, Any]] = None
 
+  # Fully.qualified.python.module to search for SubvolumeProcessor `name`.
+  module_search_path: str = 'connectomics.volume.processor'
 
-# TODO(timblakely): Potentially replace this with just (ProcessVolumeConfig, BBox)
-@dataclasses_json.dataclass_json
+
 @dataclasses.dataclass
-class ProcessSubvolumeRequest:
-  """Work unit describing a subvolume to process."""
-
-  # Processor configuration.
-  processor: SubvolumeProcessorConfig
-
-  # Directory to write out intermediate data.
-  output_dir: str
-
-  # TODO(timblakely): Make bounding boxes a proper dataclass so these
-  # encoder/decoders are no longer necessary. Box to process.
-  box: bounding_box.BoundingBox
-
-
-@dataclasses_json.dataclass_json
-@dataclasses.dataclass
-class ProcessVolumeConfig:
+class ProcessVolumeConfig(dataclasses_json.DataClassJsonMixin):
   """User-supplied configuration."""
 
   # Input volume to process.
@@ -94,9 +79,13 @@ class ProcessVolumeConfig:
   overlap: array.Tuple3i = dataclasses.field(
       metadata=dataclasses_json.config(decoder=tuple))
 
-  # TODO(timblakely): Support back shifting edge boxes. TODO(timblakely): Support
-  # expanding underlying tensorstore bounds so that end chunks can be fully
-  # processed.
+  # Number of bounding boxes to batch together per work item during processing.
+  batch_size: int = 1
+
+  # TODO(timblakely): Support back shifting edge boxes.
+
+  # TODO(timblakely): Support expanding underlying tensorstore bounds so that end
+  # chunks can be fully processed.
 
 
 class OutputNums(enum.Enum):
@@ -114,9 +103,9 @@ class SubvolumeProcessor:
   # Effective subvolume/overlap configuration as set by the framework within
   # which this processor is being executed. This might include, e.g. user
   # overrides supplied via command-line arguments.
-  _context = ...  # type: ImmutableArray
-  _subvol_size = ...  # type: ImmutableArray
-  _overlap = ...  # type: ImmutableArray
+  _context: ImmutableArray
+  _subvol_size: ImmutableArray
+  _overlap: ImmutableArray
 
   # Whether the output of this processor will be cropped for subvolumes that
   # are adjacent to the input bounding box(es).
@@ -151,7 +140,7 @@ class SubvolumeProcessor:
     return type(self).__name__,
 
   def pixelsize(self, input_psize: array.ArrayLike3d) -> ImmutableArray:
-    return input_psize
+    return ImmutableArray(input_psize)
 
   def num_channels(self, input_channels: int) -> int:
     return input_channels
@@ -201,11 +190,11 @@ class SubvolumeProcessor:
     self._subvol_size = array.ImmutableArray(subvol_size)
     self._overlap = array.ImmutableArray(overlap)
     if np.all(self.overlap() == self._overlap):
-      self._context = self.context()  # pytype: disable=annotation-type-mismatch
+      self._context = self.context()  # type: ignore
     else:
       pre = self._overlap // 2
       post = self._overlap - pre
-      self._context = pre, post  # pytype: disable=annotation-type-mismatch
+      self._context = pre, post  # type: ignore
 
   def _context_for_box(
       self, box: bounding_box.BoundingBoxBase) -> Tuple[np.ndarray, np.ndarray]:
@@ -252,3 +241,13 @@ class SubvolumeProcessor:
     fx, fy, fz = front
     bx, by, bz = np.array(data.shape[:0:-1]) - back
     return Subvolume(data[:, fz:bz, fy:by, fx:bx], cropped_box)
+
+
+def get_processor(config: SubvolumeProcessorConfig) -> SubvolumeProcessor:
+  name = config.name
+  package = importlib.import_module(config.module_search_path)
+  if not hasattr(package, name):
+    raise ValueError(f'Processor not known: {name}')
+  processor = getattr(package, name)
+  args = {} if not config.args else config.args
+  return processor(**args)
