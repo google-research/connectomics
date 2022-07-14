@@ -16,35 +16,39 @@
 
 import functools
 import json
-from typing import Any, Callable, TypeVar, Union
+import typing
+from typing import Any, Callable, Type, TypeVar, Union
+
+import dataclasses_json
 
 # TODO(timblakely): Remove dependency on TF when there's a common API to read
 # files internally and externally.
-import tensorflow.compat.v2 as tf
-from tensorflow.compat.v2.io import gfile
+import tensorflow as tf
 
-Copy = gfile.copy
-DeleteRecursively = gfile.rmtree
-Exists = gfile.exists
-Glob = gfile.glob
-IsDirectory = gfile.isdir
-ListDirectory = gfile.listdir
-MakeDirs = gfile.makedirs
-MkDir = gfile.mkdir
-Open = gfile.GFile
-Remove = gfile.remove
-Rename = gfile.rename
-Stat = gfile.stat
-Walk = gfile.walk
+Copy = tf.io.gfile.copy
+DeleteRecursively = tf.io.gfile.rmtree
+Exists = tf.io.gfile.exists
+Glob = tf.io.gfile.glob
+IsDirectory = tf.io.gfile.isdir
+ListDirectory = tf.io.gfile.listdir
+MakeDirs = tf.io.gfile.makedirs
+MkDir = tf.io.gfile.mkdir
+Open = tf.io.gfile.GFile
+Remove = tf.io.gfile.remove
+Rename = tf.io.gfile.rename
+Stat = tf.io.gfile.stat
+Walk = tf.io.gfile.walk
+
+GFile = tf.io.gfile.GFile
 
 NotFoundError = tf.errors.NotFoundError
 
-GFile = gfile.GFile
-
-T = TypeVar('T')
+T = TypeVar('T', bound=dataclasses_json.DataClassJsonMixin)
 
 
-def load_dataclass(constructor: T, v: Union[str, dict[str, Any], T, None]) -> T:
+def load_dataclass(
+    constructor: type[T], v: Union[str, dict[str, Any], Type[T],
+                                   None]) -> Union[T, None]:
   """Load a dataclass from a serialized instance, file path, or dict.
 
   Args:
@@ -54,7 +58,9 @@ def load_dataclass(constructor: T, v: Union[str, dict[str, Any], T, None]) -> T:
   Returns:
     New dataclass instance.
   """
-  if isinstance(v, type(constructor)) or v is None:
+  if isinstance(v, type(constructor)):
+    return typing.cast(type[T], v)
+  elif v is None:
     return v
   elif isinstance(v, str):
     try:
@@ -64,11 +70,13 @@ def load_dataclass(constructor: T, v: Union[str, dict[str, Any], T, None]) -> T:
       # File path; attempt to load.
       with Open(v) as f:
         return constructor.from_json(f.read())
-  return constructor.from_dict(v)
+  else:
+    return constructor.from_dict(typing.cast(dict[str, Any], v))
 
 
 def dataclass_loader(
-    constructor: T) -> Callable[[Union[str, dict[str, Any], T, None]], T]:
+    constructor: type[T]
+) -> Callable[[Union[str, dict[str, Any], T, None]], Union[T, None]]:
   """Create a dataclass instance from a serialized instance, file path, or dict.
 
   Args:

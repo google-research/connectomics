@@ -59,6 +59,7 @@ class FileTest(absltest.TestCase):
                 }],
             }
         })
+    self.assertIsNotNone(ts_conf)
     self.assertEqual(ts_conf.spec, {'test': 'foo'})
     self.assertEqual(ts_conf.metadata.voxel_size, (1, 2, 3))
     self.assertLen(ts_conf.metadata.bounding_boxes, 1)
@@ -79,6 +80,7 @@ class FileTest(absltest.TestCase):
         }]
       } 
     }""")
+    self.assertIsNotNone(ts_conf)
     self.assertEqual(ts_conf.spec, {'test': 'foo'})
     self.assertEqual(ts_conf.metadata.voxel_size, (1, 2, 3))
     self.assertLen(ts_conf.metadata.bounding_boxes, 1)
@@ -101,6 +103,7 @@ class FileTest(absltest.TestCase):
         } 
       }""")
     ts_conf = file.load_dataclass(tsv.TensorstoreConfig, fname)
+    self.assertIsNotNone(ts_conf)
     self.assertEqual(ts_conf.spec, {'test': 'foo'})
     self.assertEqual(ts_conf.metadata.voxel_size, (1, 2, 3))
     self.assertLen(ts_conf.metadata.bounding_boxes, 1)
