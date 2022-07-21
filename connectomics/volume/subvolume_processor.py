@@ -207,6 +207,18 @@ class SubvolumeProcessor:
 
     return front, back
 
+  def expected_output_box(
+      self, box: bounding_box.BoundingBoxBase) -> bounding_box.BoundingBoxBase:
+    """Returns the adjusted bounding box after process() is called.
+
+    Args:
+        box: Size of the input subvolume passed to process()
+
+    Returns:
+        Bounding box for the output volume.
+    """
+    return box
+
   def crop_box(
       self, box: bounding_box.BoundingBoxBase) -> bounding_box.BoundingBoxBase:
     """Crop box front/back by self.context.
@@ -247,7 +259,7 @@ def get_processor(config: SubvolumeProcessorConfig) -> SubvolumeProcessor:
   name = config.name
   package = importlib.import_module(config.module_search_path)
   if not hasattr(package, name):
-    raise ValueError(f'Processor not known: {name}')
+    raise ValueError(f'No processor named {name} in package {package}')
   processor = getattr(package, name)
   args = {} if not config.args else config.args
   return processor(**args)

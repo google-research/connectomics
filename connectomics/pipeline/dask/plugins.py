@@ -71,6 +71,7 @@ class DaskWorker(dd.WorkerPlugin):
     processor = subvolume_processor.get_processor(self._config.processor)
 
     for bbox in bundle:
+      processor.set_effective_subvol_and_overlap(bbox.size, processor.overlap())
       self.process_bbox(processor, input_volume, output_volume, bbox)
 
   def process_bbox(self, processor: subvolume_processor.SubvolumeProcessor,
