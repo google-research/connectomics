@@ -46,7 +46,8 @@ class RelativeSubvolumeIndexer:
     return Subvolume(
         new_data,
         self._subvol.bbox.__class__(
-            start=offset[3:0:-1], size=new_data.shape[3:0:-1]))
+            start=self._subvol.start + offset[3:0:-1],
+            size=new_data.shape[3:0:-1]))
 
 
 class AbsoluteSubvolumeIndexer:
@@ -63,8 +64,11 @@ class AbsoluteSubvolumeIndexer:
     slices = typing.cast(array.CanonicalSlice, slices)
     adjusted = [slices[0]]
     for i, slc in enumerate(slices[1:]):
-      new_slice = slice(slc.start - self._subvol.start[2 - i],
-                        slc.stop - self._subvol.start[2 - i])
+      start = slc.start - self._subvol.start[2 - i]
+      start = max(start, 0)
+      stop = slc.stop - self._subvol.start[2 - i]
+      stop = min(stop, self._subvol.bbox.end[2 - i])
+      new_slice = slice(start, stop)
       adjusted.append(new_slice)
     return self._subvol[adjusted]  # pytype: disable=unsupported-operands  # dynamic-method-lookup
 

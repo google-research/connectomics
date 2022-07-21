@@ -65,10 +65,12 @@ class SubvolumeTest(absltest.TestCase):
     # Test relative indexing
     indexed = sv[:, 80:88, 13:17, 2:]
     npt.assert_array_equal(expected, indexed.data)
+    npt.assert_array_equal(BBox([102, 213, 380], [18, 4, 8]), indexed.bbox)
 
     # Test absolute indexing (values offset by the start of the bounding box).
     abs_indexed = sv.index_abs[:, 380:388, 213:217, 102:]
     npt.assert_array_equal(expected, abs_indexed.data)
+    npt.assert_array_equal(BBox([102, 213, 380], [18, 4, 8]), abs_indexed.bbox)
 
     # Test integer indexing
     ind = np.s_[:, 8, 13:17, 2:]
@@ -179,6 +181,13 @@ class SubvolumeTest(absltest.TestCase):
     npt.assert_array_equal(a.data[:, :3, :, :].ravel(), 0)
     npt.assert_array_equal(a.data[:, :, :3, :].ravel(), 0)
     npt.assert_array_equal(a.data[:, :, :, :3].ravel(), 0)
+
+  def test_slice_partial_overlap(self):
+    sv = subvolume.Subvolume(
+        np.ones([1, 10, 10, 10]), BBox([35, 35, 35], [10, 10, 10]))
+    prior_corner_bbox = BBox([30, 30, 30], [10, 10, 10])
+    clipped_sv = sv.index_abs[prior_corner_bbox.to_slice4d()]
+    self.assertEqual(clipped_sv.bbox, BBox([35, 35, 35], [5, 5, 5]))
 
 
 if __name__ == '__main__':
