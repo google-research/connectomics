@@ -236,7 +236,9 @@ class BoxGenerator(BoxGeneratorBase):
     end = np.minimum(start + self._box_size, self._outer_box.end)
     if self._back_shift_small_boxes:
       start = np.maximum(self._outer_box.start, end - self._box_size)
-    return coords, self.outer_box.__class__(start=start, end=end)
+    is_start, is_end = self.tag_border_locations(index)
+    return coords, self.outer_box.__class__(
+        start=start, end=end, is_border_start=is_start, is_border_end=is_end)
 
   # TODO(timblakely): replace usage cases where callers subsequently call
   # np.unravel
@@ -397,8 +399,9 @@ class BoxGenerator(BoxGeneratorBase):
       True if the box touches the border at the start/end (respectively for the
       1st and 2nd element of the tuple) of the bbox along the given dimension.
     """
-    coords_xyz = np.array(self._generate(index)[0])
-    is_start = coords_xyz == 0
+    # Can't use _generate here, or it would recurse.
+    coords_xyz = np.unravel_index(index, self._output.size, order='F')
+    is_start = np.array(coords_xyz) == 0
     is_end = coords_xyz == self._output.size - 1
     return is_start, is_end
 

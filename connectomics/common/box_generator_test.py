@@ -363,6 +363,15 @@ class BoxGeneratorTest(absltest.TestCase):
     npt.assert_array_equal(generator.start, new_gen.start)
     npt.assert_array_equal(generator.boxes_per_dim, new_gen.boxes_per_dim)
 
+  def test_is_border(self):
+    calc = m.BoxGenerator(
+        Box(start=(0, 0, 0), size=(2048, 2048, 1024)), box_size=(256, 256, 256))
+    for box in calc.boxes:
+      is_start = box.start == 0
+      is_end = box.end == [2048, 2048, 1024]
+      self.assertEqual(list(box.is_border_start), list(is_start))
+      self.assertEqual(list(box.is_border_end), list(is_end))
+
 
 class MultiBoxGeneratorTest(absltest.TestCase):
 

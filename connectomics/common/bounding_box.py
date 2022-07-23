@@ -33,6 +33,7 @@ def limit_encoder(v):
   return [utils.from_np_type(x) for x in v]
 
 
+# TODO(timblakely): Move is_border_* out of BoundingBox and into BoxGenerator.
 @dataclasses_json.dataclass_json
 @dataclasses.dataclass(repr=False, eq=False)
 class BoundingBoxBase(Generic[T]):
@@ -139,6 +140,10 @@ class BoundingBoxBase(Generic[T]):
     for k, v in self.__dict__.items():
       if k not in other.__dict__:
         return False
+
+      # TODO(timblakely): Do we want to count is_border_* in equality?
+      if k.startswith('is_border_'):
+        continue
 
       if isinstance(v, np.ndarray):
         if not np.all(v == other.__dict__[k]):
