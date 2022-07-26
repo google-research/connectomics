@@ -32,15 +32,16 @@ from connectomics.volume import subvolume_processor
 from connectomics.volume import tensorstore as tsv
 import dask.distributed as dd
 
-DaskWorker = plugins.DaskWorker
+ProcessSubvolumeWorker = plugins.ProcessSubvolumeWorker
 TSVolume = plugins.TSVolume
 
 
 def process_bundle(pipeline_id: str, *args, **kwargs):
   worker = dd.get_worker()
-  dask_worker = typing.cast(DaskWorker,
-                            worker.plugins[DaskWorker.name(pipeline_id)])
-  dask_worker.process_bundle(*args, **kwargs)
+  dask_worker = typing.cast(
+      ProcessSubvolumeWorker,
+      worker.plugins[ProcessSubvolumeWorker.name(pipeline_id)])
+  return dask_worker.process_bundle(*args, **kwargs)
 
 
 class DaskRunner:
@@ -72,16 +73,23 @@ class DaskRunner:
 
   def _register_with_cluster(self,
                              config: subvolume_processor.ProcessVolumeConfig):
+    """Registers required resources with the remote Dask cluster.
+
+    Args:
+      config: Configuration containing the ProcessSubvolumeWorker, intput, and
+        output volumes.
+    """
     # TODO(timblakely): pass this to the task via functools.partial.
     self._process_config = config
     self._client.register_worker_plugin(
-        DaskWorker(self.id, config), name=DaskWorker.name(self.id))
+        ProcessSubvolumeWorker(self.id, config),
+        name=ProcessSubvolumeWorker.name(self.id))
     self._client.register_worker_plugin(
         TSVolume(config.input_volume),
-        name=DaskWorker.volume_name(self.id, 'input_volume'))
+        name=ProcessSubvolumeWorker.volume_name(self.id, 'input_volume'))
     self._client.register_worker_plugin(
         TSVolume(config.output_volume),
-        name=DaskWorker.volume_name(self.id, 'output_volume'))
+        name=ProcessSubvolumeWorker.volume_name(self.id, 'output_volume'))
 
   @classmethod
   def connect(cls,
@@ -164,11 +172,12 @@ class DaskRunner:
     logging.info('Computed config: %s', computed_config.to_json(indent=2))
     return computed_config
 
-  def run(self, config: subvolume_processor.ProcessVolumeConfig):
+  def run(self, config: subvolume_processor.ProcessVolumeConfig, wait=True):
     """Begin processing a volume on a Dask cluster.
 
     Args:
       config: ProcessVolumeConfig to process.
+      wait: Wait for all tasks to complete before returning.
     """
 
     computed_config = self._compute_output_spec(config)
@@ -187,8 +196,9 @@ class DaskRunner:
         range(generator.num_boxes), computed_config.batch_size):
       bboxes = [generator.generate(b)[1] for b in batch]
       tasks.append(self._client.submit(process_bundle, self.id, bboxes))
-    # Wait for all tasks to complete...
-    _ = [t.result() for t in tasks]
+
+    if wait:
+      dd.wait(tasks)
 
     # Write out the VolumeDescriptor alongside the volume.
     with file.GFile(

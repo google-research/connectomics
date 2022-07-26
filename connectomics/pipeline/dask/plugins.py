@@ -34,7 +34,7 @@ class TSVolume(dd.WorkerPlugin):
     self.vol = descriptor.open_descriptor(self.descriptor)
 
 
-class DaskWorker(dd.WorkerPlugin):
+class ProcessSubvolumeWorker(dd.WorkerPlugin):
   """ProcessSubvolume worker implemented in Dask."""
 
   _worker: dd.Worker
@@ -59,7 +59,9 @@ class DaskWorker(dd.WorkerPlugin):
 
   def _get_volume(self, name: str) -> base.BaseVolume:
     ts_volume = typing.cast(
-        TSVolume, self._worker.plugins[DaskWorker.volume_name(self._id, name)])
+        TSVolume,
+        self._worker.plugins[ProcessSubvolumeWorker.volume_name(self._id,
+                                                                name)])
     return ts_volume.vol
 
   def process_bundle(self, bundle: Sequence[bounding_box.BoundingBox]):
@@ -70,9 +72,12 @@ class DaskWorker(dd.WorkerPlugin):
     output_volume = self._get_volume('output_volume')
     processor = subvolume_processor.get_processor(self._config.processor)
 
+    results = []
     for bbox in bundle:
       processor.set_effective_subvol_and_overlap(bbox.size, processor.overlap())
-      self.process_bbox(processor, input_volume, output_volume, bbox)
+      results.append(
+          self.process_bbox(processor, input_volume, output_volume, bbox))
+    return results
 
   def process_bbox(self, processor: subvolume_processor.SubvolumeProcessor,
                    input_volume: base.BaseVolume,
@@ -84,3 +89,4 @@ class DaskWorker(dd.WorkerPlugin):
     result = processor.process(subvol)
     assert isinstance(result, base.Subvolume)
     output_volume.write(result)
+    return result
