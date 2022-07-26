@@ -189,6 +189,174 @@ class SubvolumeTest(absltest.TestCase):
     clipped_sv = sv.index_abs[prior_corner_bbox.to_slice4d()]
     self.assertEqual(clipped_sv.bbox, BBox([35, 35, 35], [5, 5, 5]))
 
+  def test_split(self):
+    bbox = BBox([100, 200, 300], [10, 20, 30])
+    data = np.zeros(bbox.size[::-1])
+    data[0] = 1
+    data = np.cumsum(
+        np.cumsum(np.cumsum(data, axis=0), axis=1), axis=2, dtype=np.uint64)
+    data = np.concatenate((data[np.newaxis],) * 4, axis=0)
+
+    sv = Subvol(data, bbox)
+
+    splits = sv.split(np.array([10, 10, 10]), origin=np.array([0, 0, 0]))
+    self.assertLen(splits, 6)
+    self.assertTrue(all([np.all(s.bbox.size == [10, 10, 10]) for s in splits]))
+
+    expected_corners = [
+        [100, 200, 300],
+        [100, 200, 310],
+        [100, 210, 300],
+        [100, 210, 310],
+        [100, 200, 320],
+        [100, 210, 320],
+    ]
+    split_corners = [s.bbox.start for s in splits]
+    for corner in expected_corners:
+      self.assertTrue(any([np.all(corner == s) for s in split_corners]))
+
+  def test_split_unaligned(self):
+    bbox = BBox([101, 202, 303], [10, 20, 30])
+    data = np.zeros(bbox.size[::-1])
+    data[0] = 1
+    data = np.cumsum(
+        np.cumsum(np.cumsum(data, axis=0), axis=1), axis=2, dtype=np.uint64)
+    data = np.concatenate((data[np.newaxis],) * 4, axis=0)
+
+    sv = Subvol(data, bbox)
+
+    splits = sv.split(np.array([10, 10, 10]), origin=np.array([70, 70, 70]))
+    self.assertLen(splits, 24)
+    self.assertTrue(all([np.all(s.bbox.size == [10, 10, 10]) for s in splits]))
+    expected_corners = [
+        [100, 200, 300],
+        [110, 200, 300],
+        [100, 210, 300],
+        [110, 210, 300],
+        [100, 220, 300],
+        [110, 220, 300],
+        [100, 200, 310],
+        [110, 200, 310],
+        [100, 210, 310],
+        [110, 210, 310],
+        [100, 220, 310],
+        [110, 220, 310],
+        [100, 200, 320],
+        [110, 200, 320],
+        [100, 210, 320],
+        [110, 210, 320],
+        [100, 220, 320],
+        [110, 220, 320],
+        [100, 200, 330],
+        [110, 200, 330],
+        [100, 210, 330],
+        [110, 210, 330],
+        [100, 220, 330],
+        [110, 220, 330],
+    ]
+    split_corners = [s.bbox.start for s in splits]
+    for corner in expected_corners:
+      self.assertTrue(any([np.all(corner == s) for s in split_corners]))
+
+  def test_split_no_origin(self):
+    bbox = BBox([101, 202, 303], [10, 20, 30])
+    data = np.zeros(bbox.size[::-1])
+    data[0] = 1
+    data = np.cumsum(
+        np.cumsum(np.cumsum(data, axis=0), axis=1), axis=2, dtype=np.uint64)
+    data = np.concatenate((data[np.newaxis],) * 4, axis=0)
+
+    sv = Subvol(data, bbox)
+
+    splits = sv.split(np.array([10, 10, 10]))
+    self.assertLen(splits, 6)
+    self.assertTrue(all([np.all(s.bbox.size == [10, 10, 10]) for s in splits]))
+
+    expected_corners = [
+        [101, 202, 303],
+        [101, 202, 313],
+        [101, 212, 303],
+        [101, 212, 313],
+        [101, 202, 323],
+        [101, 212, 323],
+    ]
+    split_corners = [s.bbox.start for s in splits]
+    for corner in expected_corners:
+      self.assertTrue(any([np.all(corner == s) for s in split_corners]))
+
+  def test_split_and_clip(self):
+    bbox = BBox([103, 204, 305], [10, 20, 30])
+    data = np.zeros(bbox.size[::-1])
+    data[0] = 1
+    data = np.cumsum(
+        np.cumsum(np.cumsum(data, axis=0), axis=1), axis=2, dtype=np.uint64)
+    data = np.concatenate((data[np.newaxis],) * 4, axis=0)
+
+    sv = Subvol(data, bbox)
+
+    splits = sv.split(
+        np.array([10, 10, 10]),
+        origin=np.array([0, 0, 0]),
+        clip_output_subvolumes=True)
+    self.assertLen(splits, 24)
+    # Sort ensures return order doesn't matter
+    starts = np.sort(np.array([s.bbox.start for s in splits]), axis=0)
+    expected_starts = [
+        [103, 204, 305],
+        [103, 204, 305],
+        [103, 204, 305],
+        [103, 204, 305],
+        [103, 204, 305],
+        [103, 204, 305],
+        [103, 204, 310],
+        [103, 204, 310],
+        [103, 210, 310],
+        [103, 210, 310],
+        [103, 210, 310],
+        [103, 210, 310],
+        [110, 210, 320],
+        [110, 210, 320],
+        [110, 210, 320],
+        [110, 210, 320],
+        [110, 220, 320],
+        [110, 220, 320],
+        [110, 220, 330],
+        [110, 220, 330],
+        [110, 220, 330],
+        [110, 220, 330],
+        [110, 220, 330],
+        [110, 220, 330],
+    ]
+    npt.assert_array_equal(starts, expected_starts)
+    sizes = np.sort(np.array([s.bbox.size for s in splits]), axis=0)
+    expected_sizes = [
+        [3, 4, 5],
+        [3, 4, 5],
+        [3, 4, 5],
+        [3, 4, 5],
+        [3, 4, 5],
+        [3, 4, 5],
+        [3, 4, 5],
+        [3, 4, 5],
+        [3, 6, 5],
+        [3, 6, 5],
+        [3, 6, 5],
+        [3, 6, 5],
+        [7, 6, 10],
+        [7, 6, 10],
+        [7, 6, 10],
+        [7, 6, 10],
+        [7, 10, 10],
+        [7, 10, 10],
+        [7, 10, 10],
+        [7, 10, 10],
+        [7, 10, 10],
+        [7, 10, 10],
+        [7, 10, 10],
+        [7, 10, 10],
+    ]
+    npt.assert_array_equal(sizes, expected_sizes)
+
 
 if __name__ == '__main__':
   absltest.main()

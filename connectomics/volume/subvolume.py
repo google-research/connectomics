@@ -19,6 +19,7 @@ from typing import Optional, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.common import box_generator
 import numpy as np
 
 
@@ -222,3 +223,48 @@ class Subvolume:
 
     # Intentionally return self here.
     return self
+
+  def split(self,
+            size: np.ndarray,
+            origin: Optional[np.ndarray] = None,
+            clip_output_subvolumes: bool = False,
+            empty_value: Union[int, float] = 0) -> list['Subvolume']:
+    """Split a subvolume into smaller, non-overlapping subvolumes.
+
+    Args:
+      size: Size of the smaller subvolumes to generate.
+      origin: Origin of the grid to split the subvolume in global coordinates.
+        If no origin is passed, the beginning of the grid divisions begin at the
+        start corner of the subvolume.
+      clip_output_subvolumes: If true, final subvolumes will be clipped
+        according to self.bbox. If clipping is not applied, empty spaces will be
+        filled with empty_value.
+      empty_value: Fill value for overlapping, non-clipped subvolumes.
+
+    Returns:
+      List of split subvolumes.
+    """
+    if origin is None:
+      # Use this subvolume's start corner.
+      start_corner = self.start
+    else:
+      # Begin at the first origin-aligned-gridded subvolume that comes in
+      # contact with this subvolume.
+      start_corner = origin + ((self.start - origin) // size * size)
+    overlapping_box_limits = bounding_box.BoundingBox(
+        start=start_corner, end=self.start + self.size)
+    gen = box_generator.BoxGenerator(overlapping_box_limits, size)
+    new_subvols = []
+    for box in gen.boxes:
+      # Handle back edges
+      if not clip_output_subvolumes and not np.all(box.size == size):
+        box = bounding_box.BoundingBox(box.start, size)
+      split_data = self.index_abs[box.to_slice4d()]
+      empty_data = np.full([split_data.shape[0]] + list(box.size[::-1]),
+                           empty_value)
+      new_subvol = Subvolume(empty_data, box)
+      new_subvol.merge_with(split_data, empty_value)
+      if clip_output_subvolumes:
+        new_subvol = new_subvol.clip_abs(self.bbox)
+      new_subvols.append(new_subvol)
+    return new_subvols
