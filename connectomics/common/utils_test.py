@@ -14,8 +14,11 @@
 # limitations under the License.
 """Tests for utils."""
 
+import dataclasses
+
 from absl.testing import absltest
 from connectomics.common import utils
+import numpy as np
 
 
 class UtilsTest(absltest.TestCase):
@@ -24,6 +27,16 @@ class UtilsTest(absltest.TestCase):
     seq = list(range(1, 11))
     batched = list(utils.batch(seq, 3))
     self.assertEqual(batched, [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]])
+
+  def test_npdataclassjsonmixin(self):
+
+    @dataclasses.dataclass
+    class Test(utils.NPDataClassJsonMixin):
+      foo: int
+      bar: float
+
+    v = Test(np.int64(123), np.float32(4.56))
+    self.assertEqual(v, v.from_json(v.to_json()))
 
 
 if __name__ == '__main__':

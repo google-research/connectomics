@@ -17,6 +17,7 @@
 import itertools
 from typing import Any
 
+import dataclasses_json
 import numpy as np
 import tensorstore as ts
 
@@ -97,3 +98,23 @@ def canonicalize_dtype_for_ts(dtype: Any) -> str:
         f'please add conversion from {dtype} to a known TensorStore type in '
         '_TS_DTYPE_MAP')
   return _TS_DTYPE_MAP[dtype]
+
+
+def _handle_np(o):
+  if hasattr(o, 'item'):
+    return o.item()
+  raise TypeError
+
+
+class NPDataClassJsonMixin(dataclasses_json.DataClassJsonMixin):
+  """Dataclass mixin that supports Numpy decimal types e.g. np.int64.
+
+  Occasionally dataclasses are assigned values that are wrapped in a numpy type.
+  If this happens, the built-in JSON encoder used by dataclasses-json cannot do
+  the appropriate coersion to the underlying numpy type automatically. This shim
+  allows for converting from the various numpy types to the underlying python
+  type before deferring to the original encoder.
+  """
+
+  def to_json(self, *args, **kw) -> str:
+    return super().to_json(*args, default=_handle_np, **kw)
