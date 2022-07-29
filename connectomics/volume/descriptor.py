@@ -19,6 +19,7 @@ import typing
 from typing import Optional, Union
 
 from connectomics.common import file
+from connectomics.common import utils
 from connectomics.volume import base
 from connectomics.volume import decorator
 from connectomics.volume import tensorstore as tsv
@@ -26,7 +27,7 @@ import dataclasses_json
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
-class VolumeDescriptor(dataclasses_json.DataClassJsonMixin):
+class VolumeDescriptor(utils.NPDataClassJsonMixin):
   """De/Serializable description of a volume."""
 
   # List of python dicts of specs to decorate the volume via

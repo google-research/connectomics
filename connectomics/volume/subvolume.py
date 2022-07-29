@@ -25,7 +25,9 @@ import numpy as np
 
 def _check_bbox_dims(bbox: bounding_box.BoundingBox, data: np.ndarray):
   bbox_shape = bbox.size[::-1]
-  data_shape = data.shape[1:]
+  data_shape = data.shape
+  if len(bbox_shape) != 4:
+    data_shape = data.shape[1:]
   if not np.all(bbox_shape == data_shape):
     raise ValueError(
         f'New bbox does not match data shape: {bbox_shape} vs {data_shape}')

@@ -15,12 +15,10 @@
 """Dask plugins supporting subvolume processing."""
 
 import typing
-from typing import Sequence
 
-from absl import logging
-from connectomics.common import bounding_box
 from connectomics.volume import base
 from connectomics.volume import descriptor
+from connectomics.volume import subvolume
 from connectomics.volume import subvolume_processor
 import dask.distributed as dd
 
@@ -28,7 +26,7 @@ import dask.distributed as dd
 class TSVolume(dd.WorkerPlugin):
 
   def __init__(self, vol_descriptor: descriptor.VolumeDescriptor):
-    self.descriptor = vol_descriptor.to_json()
+    self.descriptor = vol_descriptor.to_json(indent=2)
 
   def setup(self, worker: dd.Worker):
     self.vol = descriptor.open_descriptor(self.descriptor)
@@ -64,29 +62,14 @@ class ProcessSubvolumeWorker(dd.WorkerPlugin):
                                                                 name)])
     return ts_volume.vol
 
-  def process_bundle(self, bundle: Sequence[bounding_box.BoundingBox]):
-    logging.info('Worker %s processing bundle of size %s', self._id,
-                 len(bundle))
-
-    input_volume = self._get_volume('input_volume')
-    output_volume = self._get_volume('output_volume')
+  def process_subvolume(self,
+                        subvol: subvolume.Subvolume) -> subvolume.Subvolume:
     processor = subvolume_processor.get_processor(self._config.processor)
-
-    results = []
-    for bbox in bundle:
-      processor.set_effective_subvol_and_overlap(bbox.size, processor.overlap())
-      results.append(
-          self.process_bbox(processor, input_volume, output_volume, bbox))
-    return results
-
-  def process_bbox(self, processor: subvolume_processor.SubvolumeProcessor,
-                   input_volume: base.BaseVolume,
-                   output_volume: base.BaseVolume,
-                   bbox: bounding_box.BoundingBox):
-    # TODO(timblakely): Modify input bounding box based on required context.
-    logging.info('Processing bounding box %s', bbox)
-    subvol = input_volume[bbox.to_slice4d()]
+    processor.set_effective_subvol_and_overlap(subvol.bbox.size,
+                                               processor.overlap())
     result = processor.process(subvol)
+    if isinstance(result, list):
+      raise ValueError(
+          'Dask SubvolumeProcessors must return a single subvolume.')
     assert isinstance(result, base.Subvolume)
-    output_volume.write(result)
     return result

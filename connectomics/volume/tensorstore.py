@@ -20,10 +20,10 @@ from typing import Any, Optional, Sequence, Union
 from connectomics.common import array
 from connectomics.common import bounding_box
 from connectomics.common import file
+from connectomics.common import utils
 from connectomics.volume import base
 import dataclasses_json
 import numpy as np
-
 import tensorstore as ts
 
 
@@ -34,7 +34,7 @@ def tuple_deserialize(v: Sequence[Union[int, float]]) -> array.Tuple3f:
 
 
 @dataclasses.dataclass(eq=True)
-class TensorstoreMetadata(dataclasses_json.DataClassJsonMixin):
+class TensorstoreMetadata(utils.NPDataClassJsonMixin):
   """Additional volumetric metadata associated with TensorStore volumes.
 
   Attributes:
@@ -50,7 +50,7 @@ class TensorstoreMetadata(dataclasses_json.DataClassJsonMixin):
 
 
 @dataclasses.dataclass(eq=True)
-class TensorstoreConfig(dataclasses_json.DataClassJsonMixin):
+class TensorstoreConfig(utils.NPDataClassJsonMixin):
   spec: dict[str, Any]
   metadata: Optional[TensorstoreMetadata] = dataclasses.field(
       default=None,
@@ -106,7 +106,7 @@ class TensorstoreVolume(base.BaseVolume):
 
   @property
   def dtype(self) -> np.dtype:
-    return self._store.dtype
+    return self._store.dtype.numpy_dtype
 
   @property
   def bounding_boxes(self) -> list[bounding_box.BoundingBox]:
@@ -121,7 +121,12 @@ class TensorstoreVolume(base.BaseVolume):
   def write_slices(self, slices: array.CanonicalSlice, value: np.ndarray):
     """Writes a subvolume of data based on a specified set of CZYX slices."""
     with ts.Transaction():
-      self._store[slices].write(value).result()
+      self._store[tuple(slices)].write(value).result()
+
+  @property
+  def chunk_size(self) -> array.Tuple4i:
+    """Backing chunk size in voxels, CZYX."""
+    return self._store.schema.chunk_layout.read_chunk.shape
 
 
 class TensorstoreArrayVolume(TensorstoreVolume):

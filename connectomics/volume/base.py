@@ -135,5 +135,10 @@ class BaseVolume:
     """List of bounding boxes contained in this volume."""
     raise NotImplementedError
 
+  @property
+  def chunk_size(self) -> array.Tuple4i:
+    """Backing chunk size in voxels, CZYX."""
+    raise NotImplementedError
+
   # TODO(timblakely): determine what other attributes we want to make mandatory for
   # all implementations and add them here.

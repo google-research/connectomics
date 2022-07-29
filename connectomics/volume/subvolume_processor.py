@@ -55,11 +55,6 @@ class ProcessVolumeConfig(dataclasses_json.DataClassJsonMixin):
   # Input volume to process.
   input_volume: descriptor.VolumeDescriptor
 
-  # Output volume. Note that only TensorStore is currently supported. The
-  # "metadata" field of the TensorStore spec should not be populated, as it is
-  # automatically filled in by the processor.
-  output_volume: descriptor.VolumeDescriptor
-
   # Output directory to write the volumetric data, inserted automatically into
   # the output_volume's TensorStore spec.
   output_dir: str
@@ -82,10 +77,15 @@ class ProcessVolumeConfig(dataclasses_json.DataClassJsonMixin):
   # Number of bounding boxes to batch together per work item during processing.
   batch_size: int = 1
 
-  # TODO(timblakely): Support back shifting edge boxes.
+  # Additional Tensorstore context configuration applied to the input. Useful
+  # for limiting parallelism.
+  input_ts_context: Optional[dict[str, Any]] = None
 
-  # TODO(timblakely): Support expanding underlying tensorstore bounds so that end
-  # chunks can be fully processed.
+  # Additional Tensorstore context configuration applied to the output. Useful
+  # for limiting parallelism.
+  output_ts_context: Optional[dict[str, Any]] = None
+
+  # TODO(timblakely): Support back shifting edge boxes.
 
 
 class OutputNums(enum.Enum):

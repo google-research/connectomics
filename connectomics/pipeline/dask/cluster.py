@@ -25,10 +25,19 @@ import dataclasses_json
 
 @dataclasses.dataclass
 class LocalDaskClusterConfig(dataclasses_json.DataClassJsonMixin):
-  """Dataclass version of the parameters passed to dask.distributed.Cluster."""
+  """Dataclass version of parameters passed to dask.distributed.LocalCluster."""
 
-  # Number of workers in the local cluster.
-  n_workers: int
+  # Number of workers in the local cluster. Exact count depends on the
+  # underlying Dask configuration (i.e. `'threaded'` vs `'processes'`), but in
+  # general will default to the number of available virtual cores.
+  n_workers: Optional[int]
+
+  # Number of threads per worker. Exact count depends on the underlying Dask
+  # configuration (i.e. `'threaded'` vs `'processes'`), but in general will
+  # default to the number of available virtual cores. Note that in combination
+  # with `n_workers`, thread count can be intentionally oversubscribed, which
+  # can be useful in situations where I/O is a bottleneck.
+  threads_per_worker: Optional[int]
 
   # Name of the cluster.
   name: str = 'local_cluster'

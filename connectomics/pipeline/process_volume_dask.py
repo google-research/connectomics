@@ -18,6 +18,10 @@ Supports launching local clusters and connecting to remote, already running
 clusters (e.g. by launch_local_dask_cluster.py or a Kubernetes cluster running
 in the cloud).
 
+Note that currently only TensorStore + n5 compression are supported as output
+formats, though we expect to be able to support arbitrary TensorStore output
+formats in the near future.
+
 Example usage:
 
   python3 connectomics/pipeline/process_volume_dask.py \
@@ -43,17 +47,18 @@ _DASK_CONFIG = flags.DEFINE_string(
     None,
     'JSON DaskClusterConfig, or path to JSON config.',
     required=True)
+_RESTART_WORKERS = flags.DEFINE_bool(
+    'restart_workers', False,
+    'Restart workers on initial connection to the cluster. If you are using '
+    'a long-running cluster and you are iterating on code, the workers will '
+    'not pick up or reload any changes unless they are restarted prior to '
+    'executing a pipeline.')
 
 
 def verify_process_volume_config(
     config: subvolume_processor.ProcessVolumeConfig):
   if config.input_volume.volinfo is not None:
     raise ValueError('Volinfo not supported externally')
-  if config.output_volume.decorator_specs:
-    raise ValueError('Output volumes cannot have decorators')
-  if (config.output_volume.tensorstore_config and
-      config.output_volume.tensorstore_config.metadata):
-    raise ValueError('Output volumes cannot have metadata set')
 
 
 def load_configs(
@@ -85,7 +90,8 @@ def main(_) -> None:
   logging.info('Loaded config: %s', config.to_json(indent=2))
   verify_process_volume_config(config)
 
-  dask_processor = runner.DaskRunner.connect(dask_config, restart=False)
+  dask_processor = runner.DaskRunner.connect(
+      dask_config, restart=_RESTART_WORKERS.value)
   dask_processor.run(config)
 
 
