@@ -22,6 +22,7 @@ from typing import Any, Tuple, Optional, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.common import file
 from connectomics.volume import descriptor
 from connectomics.volume import subvolume
 import dataclasses_json
@@ -53,7 +54,9 @@ class ProcessVolumeConfig(dataclasses_json.DataClassJsonMixin):
   """User-supplied configuration."""
 
   # Input volume to process.
-  input_volume: descriptor.VolumeDescriptor
+  input_volume: descriptor.VolumeDescriptor = dataclasses.field(
+      metadata=dataclasses_json.config(
+          decoder=file.dataclass_loader(descriptor.VolumeDescriptor)))
 
   # Output directory to write the volumetric data, inserted automatically into
   # the output_volume's TensorStore spec.

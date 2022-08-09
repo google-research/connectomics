@@ -140,5 +140,10 @@ class BaseVolume:
     """Backing chunk size in voxels, CZYX."""
     raise NotImplementedError
 
+  def clip_box_to_volume(
+      self, box: bounding_box.BoundingBox) -> bounding_box.BoundingBox:
+    return bounding_box.BoundingBox(
+        box.start, end=np.minimum(box.end, self.volume_size))
+
   # TODO(timblakely): determine what other attributes we want to make mandatory for
   # all implementations and add them here.

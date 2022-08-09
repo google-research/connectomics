@@ -16,6 +16,7 @@
 
 from absl.testing import absltest
 from connectomics.common import array
+from connectomics.common import bounding_box
 from connectomics.volume import base
 import numpy as np
 import numpy.testing as npt
@@ -139,6 +140,25 @@ class BaseVolumeTest(absltest.TestCase):
     v = WriteSlicesVolume()
     v[0, 1:3, 5:, :] = expected_data
     self.assertTrue(v.called)
+
+  def test_clip_box(self):
+
+    class GetPointsVolume(ShimVolume):
+
+      @property
+      def volume_size(self):
+        return [4, 5, 6]
+
+    v = GetPointsVolume()
+    box = bounding_box.BoundingBox([1, 2, 3], [100, 200, 300])
+    clipped = v.clip_box_to_volume(box)
+    self.assertNotEqual(clipped, box)
+    self.assertEqual(tuple(clipped.end), (4, 5, 6))
+
+    v = GetPointsVolume()
+    box = bounding_box.BoundingBox([0, 0, 0], [2, 1, 3])
+    clipped = v.clip_box_to_volume(box)
+    self.assertEqual(clipped, box)
 
 
 if __name__ == '__main__':
