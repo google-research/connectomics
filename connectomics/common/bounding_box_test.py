@@ -238,6 +238,7 @@ class BoundingBoxTest(absltest.TestCase):
     expected = np.index_exp[start[4]:end[4], start[3]:end[3], start[2]:end[2],
                             start[1]:end[1], start[0]:end[0]]
     self.assertEqual(expected, box.to_slice_tuple())
+    self.assertEqual(expected[::-1], box.to_slice_tuple(order='f'))
     self.assertEqual(expected[1:], box.to_slice4d())
     self.assertEqual(expected[2:], box.to_slice3d())
 
@@ -400,6 +401,40 @@ class GlobalTest(absltest.TestCase):
     # Ensure it can work with Base
     new_box = Base.from_json(box.to_json())
     self.assertEqual(box, new_box)
+
+  def test_from_slices(self):
+    slices = [
+        slice(3, 7),
+        slice(11, 17),
+        slice(-3, 9),
+        slice(5, 55),
+        slice(7, 8),
+    ]
+
+    # C order, inclusive
+    self.assertEqual(
+        Box(start=[3, 11, -3, 5, 7][::-1], end=[7, 17, 9, 55, 8][::-1]),
+        bounding_box.from_slices(slices))
+
+    # C order, exclusive
+    self.assertEqual(
+        Box(start=[3, 11, -3, 5, 7][::-1], end=[6, 16, 8, 54, 7][::-1]),
+        bounding_box.from_slices(slices, inclusive=False))
+
+    # Fortran order, inclusive
+    self.assertEqual(
+        Box(start=[3, 11, -3, 5, 7], end=[7, 17, 9, 55, 8]),
+        bounding_box.from_slices(slices, order='f'))
+
+    # Fortran order, exclusive
+    self.assertEqual(
+        Box(start=[3, 11, -3, 5, 7], end=[6, 16, 8, 54, 7]),
+        bounding_box.from_slices(slices, order='f', inclusive=False))
+
+    # Invalid extents
+    with self.assertRaises(ValueError):
+      slices.append(slice(3, None))
+      bounding_box.from_slices(slices)
 
 
 if __name__ == '__main__':

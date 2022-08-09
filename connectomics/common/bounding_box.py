@@ -357,20 +357,24 @@ class BoundingBoxBase(Generic[T]):
 
   def to_slice_tuple(self,
                      start_dim: Optional[int] = None,
-                     end_dim: Optional[int] = None) -> Tuple[slice, ...]:
-    """Returns slice in C-order (reverse dimension akin to ZYX).
+                     end_dim: Optional[int] = None,
+                     order: str = 'c') -> Tuple[slice, ...]:
+    """Returns slice in C or Fortran-order (XYZ).
 
     Args:
-      start_dim: Optional beginning dimension to begin slice (forward format
-        e.g. XYZ).
-      end_dim: Optional end dimension to begin slice (forward format).
+      start_dim: Optional beginning dimension to begin slice.
+      end_dim: Optional end dimension to begin slice.
+      order: C or Fortran order.
 
     Returns:
       Tuple corresponding to a slice expression akin to np.index_exp.
     """
     start = self.start[start_dim:end_dim]
     end = self.end[start_dim:end_dim]
-    return tuple(slice(s, e, None) for s, e in zip(start[::-1], end[::-1]))
+    extents = tuple(zip(start, end))
+    if order[0].lower() == 'c':
+      extents = extents[::-1]
+    return tuple(slice(s, e, None) for s, e in extents)
 
   def to_slice3d(self) -> Tuple[slice, slice, slice]:
     """Convenience function for 3d use.
@@ -511,3 +515,31 @@ def from_json(as_json: str) -> BoundingBoxBase:
          [utils.is_floatlike(v) for v in bbox.size]):
     return FloatBoundingBox(bbox.start, bbox.size)
   return BoundingBox(bbox.start, bbox.size)
+
+
+def from_slices(slices: Sequence[slice],
+                order='c',
+                inclusive=True) -> BoundingBox:
+  """Creates a new BoundingBox from slice extents.
+
+  Args:
+    slices: Extents for the limits of the bounding box.
+    order: C or Fortran order of slices (CZYX... vs XYZC...).
+    inclusive: If the `slice`.start is considered inclusive or not. If not, box
+      start/end extents will be slice.start:slice.stop-1.
+
+  Returns:
+    New BoundingBox with the given extents.
+
+  Raises:
+    ValueError: If any of the extents is not numeric.
+  """
+  extents = [(s.start, s.stop) for s in slices]
+  if np.any(None in np.array(extents)):
+    raise ValueError('All slices must be finite.')
+  if not inclusive:
+    extents = tuple((a, z - 1) for a, z in extents)
+  if order[0].lower() == 'c':
+    extents = extents[::-1]
+  start, stop = zip(*extents)
+  return BoundingBox(start, end=stop)
