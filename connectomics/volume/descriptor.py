@@ -14,9 +14,10 @@
 # limitations under the License.
 """Implementation of VolumeDescriptor."""
 
+import copy
 import dataclasses
 import typing
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from connectomics.common import file
 from connectomics.common import utils
@@ -57,20 +58,16 @@ def load_descriptor(spec: Union[str, VolumeDescriptor]) -> VolumeDescriptor:
   return desc
 
 
-def load_ts_config(
-    spec: Union[str, tsv.TensorstoreConfig]) -> tsv.TensorstoreConfig:
-  config = file.load_dataclass(tsv.TensorstoreConfig, spec)
-  if config is None:
-    raise ValueError(f'Could not load descriptor: {spec}')
-  return config
-
-
-def open_descriptor(spec: Union[str, VolumeDescriptor]) -> base.BaseVolume:
+def open_descriptor(
+    spec: Union[str, VolumeDescriptor],
+    context: Optional[dict[str, Any]] = None) -> base.BaseVolume:
   """Open a volume from a volume descriptor.
 
   Args:
     spec: A serialized or fully loaded instance of VolumeDescriptor, or a path
       to a JSON serialized VolumeDescriptor object.
+    context: Optional TensorStore Context specification. Only applicable to
+      TensorStore-backed volumes.
 
   Returns:
     Loaded volume, including any volume decorators.
@@ -78,13 +75,19 @@ def open_descriptor(spec: Union[str, VolumeDescriptor]) -> base.BaseVolume:
   Raises:
     ValueError: If volinfo is present, as it is internal-only.
   """
-
   spec = load_descriptor(spec)
 
   if spec.volinfo:
     raise ValueError('volinfo field not supported')
 
-  config = load_ts_config(spec.tensorstore_config)
+  if context:
+    if not spec.tensorstore_config:
+      raise ValueError(
+          'Context can only be applied to TensorStore-backed volumes')
+    spec = copy.deepcopy(spec)
+    spec.tensorstore_config.spec['context'] = context
+
+  config = tsv.load_ts_config(spec.tensorstore_config)
 
   config = typing.cast(tsv.TensorstoreConfig, config)
   volume = tsv.TensorstoreVolume(config)

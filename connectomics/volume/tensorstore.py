@@ -14,6 +14,7 @@
 # limitations under the License.
 """A Tensorstore-backed Volume."""
 
+import copy
 import dataclasses
 from typing import Any, Optional, Sequence, Union
 
@@ -118,10 +119,20 @@ class TensorstoreVolume(base.BaseVolume):
     assert self._config.metadata
     return self._config.metadata
 
-  def write_slices(self, slices: array.CanonicalSlice, value: np.ndarray):
+  def write_slices(self,
+                   slices: array.CanonicalSlice,
+                   value: np.ndarray,
+                   use_transaction=True):
     """Writes a subvolume of data based on a specified set of CZYX slices."""
-    with ts.Transaction():
+
+    def _write():
       self._store[tuple(slices)].write(value).result()
+
+    if use_transaction:
+      with ts.Transaction():
+        _write()
+    else:
+      _write()
 
   @property
   def chunk_size(self) -> array.Tuple4i:
@@ -141,3 +152,20 @@ class TensorstoreArrayVolume(TensorstoreVolume):
         },
         metadata=metadata)
     super().__init__(config)
+
+
+def create_volume_if_necessary(tensorstore_config: TensorstoreConfig):
+  tensorstore_config = copy.deepcopy(tensorstore_config)
+  tensorstore_config.spec['create'] = True
+  tensorstore_config.spec['delete_existing'] = True
+  # Open happens in constructor.
+  _ = TensorstoreVolume(tensorstore_config)
+
+
+def load_ts_config(spec: Union[str, TensorstoreConfig]) -> TensorstoreConfig:
+  config = file.load_dataclass(TensorstoreConfig, spec)
+  if config is None:
+    raise ValueError(f'Could not load descriptor: {spec}')
+  return config
+
+
