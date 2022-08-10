@@ -91,7 +91,10 @@ def local_cluster(config: DaskClusterConfig,
     tuple of dask.SpecCluster (i.e. the cluster object) and a dask.Client.
   """
   assert config.local
+  logging.info('Starting local cluster in %sblocking mode',
+               ('' if block else 'non-'))
   cluster = dd.LocalCluster(**config.local.to_dict())
+  logging.info('Connecting client to cluster: %s', cluster)
   client = dd.Client(cluster)
   if config.additional_pythonpaths:
     logging.info('Adding additional python paths: %s',
@@ -104,7 +107,6 @@ def local_cluster(config: DaskClusterConfig,
 
     client.run(_add_paths, config.additional_pythonpaths)
 
-  logging.info(cluster)
   while block:
     time.sleep(1)
 
