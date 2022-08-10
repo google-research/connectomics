@@ -62,9 +62,6 @@ class ProcessVolumeConfig(dataclasses_json.DataClassJsonMixin):
   # the output_volume's TensorStore spec.
   output_dir: str
 
-  # Bounding boxes to process.
-  bounding_boxes: list[bounding_box.BoundingBox]
-
   # Processor configuration to apply.
   processor: SubvolumeProcessorConfig
 
@@ -72,10 +69,15 @@ class ProcessVolumeConfig(dataclasses_json.DataClassJsonMixin):
   subvolume_size: array.Tuple3i = dataclasses.field(
       metadata=dataclasses_json.config(decoder=tuple))
 
-  # Amount of overlap between processed subvolumes. This is independent of any
-  # additional context required by individual processors.
-  overlap: array.Tuple3i = dataclasses.field(
-      metadata=dataclasses_json.config(decoder=tuple))
+  # Bounding boxes to process.
+  bounding_boxes: Optional[list[bounding_box.BoundingBox]] = None
+
+  # Overlap between neighboring subvolumes. If not specified, will fall back to
+  # the overlap determined by the processor.
+  overlap: Optional[array.Tuple3i] = dataclasses.field(
+      default=None,
+      metadata=dataclasses_json.config(
+          decoder=lambda x: None if x is None else tuple(x)))
 
   # Number of bounding boxes to batch together per work item during processing.
   batch_size: int = 1
@@ -214,13 +216,18 @@ class SubvolumeProcessor:
       self, box: bounding_box.BoundingBoxBase) -> bounding_box.BoundingBoxBase:
     """Returns the adjusted bounding box after process() is called.
 
+    Note that this is a basic implementation. Subclasses are free to override
+    this function.
+
     Args:
         box: Size of the input subvolume passed to process()
 
     Returns:
         Bounding box for the output volume.
     """
-    return box
+    scale_factor = 1 / self.pixelsize(np.repeat(1, len(box.size)))
+    cropped_box = self.crop_box(box)
+    return cropped_box.scale(list(scale_factor))
 
   def crop_box(
       self, box: bounding_box.BoundingBoxBase) -> bounding_box.BoundingBoxBase:
