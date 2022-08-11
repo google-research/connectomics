@@ -15,7 +15,7 @@
 """4-D volume abstraction."""
 
 import typing
-from typing import Union
+from typing import Optional, Sequence, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
@@ -142,8 +142,46 @@ class BaseVolume:
 
   def clip_box_to_volume(
       self, box: bounding_box.BoundingBox) -> bounding_box.BoundingBox:
-    return bounding_box.BoundingBox(
-        box.start, end=np.minimum(box.end, self.volume_size))
+    # For bounding boxes dims that are entirely outside of the volume, they will
+    # be clipped to the nearest edge/corner and have zero size.
+    zeros = np.repeat(0, len(self.volume_size))
+    start = np.minimum(np.maximum(box.start, zeros), self.volume_size)
+    end = np.minimum(np.maximum(box.end, zeros), self.volume_size)
+    return bounding_box.BoundingBox(start, end=end)
 
   # TODO(timblakely): determine what other attributes we want to make mandatory for
   # all implementations and add them here.
+
+
+def get_bounding_boxes_or_full(
+    volume: BaseVolume,
+    bounding_boxes: Optional[Sequence[bounding_box.BoundingBoxBase]] = None,
+    clip: bool = False,
+) -> list[bounding_box.BoundingBox]:
+  """Return the bounding boxes from the config, volume, or volume extents.
+
+  If the config contains bounding_boxes, they are clipped according to the
+  volume's size and returned. If none are given, fall back to the volume's
+  bounding boxes. Finally, if the volume does not contain any bounding boxes,
+  return a new bounding box whose origin is [0,0,0] and size is the volume's
+  size.
+
+  Args:
+    volume: The volume to retrieve bounding boxes from.
+    bounding_boxes: If set, overrides bounding boxes from the volume.
+    clip: If set, will clip any bounding boxes to the volume extents
+
+  Returns:
+    A list of bounding boxes.
+  """
+  if bounding_boxes:
+    target_boxes = list(bounding_boxes)
+  elif volume.bounding_boxes:
+    target_boxes = list(volume.bounding_boxes)
+  else:
+    target_boxes = [
+        bounding_box.BoundingBox([0, 0, 0], size=volume.volume_size)
+    ]
+  if not clip:
+    return target_boxes
+  return [volume.clip_box_to_volume(b) for b in target_boxes]

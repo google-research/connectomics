@@ -21,6 +21,8 @@ from connectomics.volume import base
 import numpy as np
 import numpy.testing as npt
 
+Box = bounding_box.BoundingBox
+
 
 class ShimVolume(base.BaseVolume):
 
@@ -150,15 +152,74 @@ class BaseVolumeTest(absltest.TestCase):
         return [4, 5, 6]
 
     v = GetPointsVolume()
-    box = bounding_box.BoundingBox([1, 2, 3], [100, 200, 300])
+    box = Box([1, 2, 3], [100, 200, 300])
     clipped = v.clip_box_to_volume(box)
     self.assertNotEqual(clipped, box)
     self.assertEqual(tuple(clipped.end), (4, 5, 6))
 
     v = GetPointsVolume()
-    box = bounding_box.BoundingBox([0, 0, 0], [2, 1, 3])
+    box = Box([0, 0, 0], [2, 1, 3])
     clipped = v.clip_box_to_volume(box)
     self.assertEqual(clipped, box)
+
+  def test_get_bounding_boxes_or_full(self):
+
+    volume_boxes = [
+        Box([0, 0, 0], [11, 21, 31]),
+    ]
+
+    class BBoxVolume(ShimVolume):
+
+      def __init__(self, boxes, size=None):
+        super().__init__()
+        if size is None:
+          size = [10, 20, 30]
+        self._boxes = boxes
+        self._size = size
+
+      @property
+      def bounding_boxes(self):
+        return self._boxes
+
+      @property
+      def volume_size(self):
+        return self._size
+
+    # Get bounding boxes from volume
+    result = base.get_bounding_boxes_or_full(BBoxVolume(volume_boxes))
+    self.assertLen(result, 1)
+    self.assertEqual(tuple(result), tuple(volume_boxes))
+
+    # Get full bounding box since there's none in the volume.
+    result = base.get_bounding_boxes_or_full(BBoxVolume([]))
+    self.assertLen(result, 1)
+    self.assertEqual(tuple(result), (Box(
+        [0, 0, 0],
+        [10, 20, 30],
+    ),))
+
+    # Get bboxes not clipped to volume
+    expected = [
+        Box([0, 0, 4], [0, 0, 3]),
+        Box([6, 7, 8], end=[10, 20, 30]),
+    ]
+    result = base.get_bounding_boxes_or_full(BBoxVolume([]), expected)
+    self.assertLen(result, 2)
+    self.assertEqual(tuple(result), tuple(expected))
+
+    # Get bboxes clipped to volume
+    expected = [
+        Box([0, 0, 4], [0, 0, 3]),
+        Box([6, 7, 8], end=[10, 20, 30]),
+    ]
+    result = base.get_bounding_boxes_or_full(
+        BBoxVolume([]), [
+            Box([-70, -3, 4], [1, 2, 3]),
+            Box([6, 7, 8], end=[440, 234, 3222]),
+        ],
+        clip=True)
+    self.assertLen(result, 2)
+    self.assertEqual(tuple(result), tuple(expected))
 
 
 if __name__ == '__main__':
