@@ -108,7 +108,7 @@ class SubvolumeProcessor:
   # Effective subvolume/overlap configuration as set by the framework within
   # which this processor is being executed. This might include, e.g. user
   # overrides supplied via command-line arguments.
-  _context: ImmutableArray
+  _context: tuple[ImmutableArray, ImmutableArray]
   _subvol_size: ImmutableArray
   _overlap: ImmutableArray
 
@@ -195,11 +195,11 @@ class SubvolumeProcessor:
     self._subvol_size = array.ImmutableArray(subvol_size)
     self._overlap = array.ImmutableArray(overlap)
     if np.all(self.overlap() == self._overlap):
-      self._context = self.context()  # type: ignore
+      self._context = tuple([array.ImmutableArray(c) for c in self.context()])
     else:
       pre = self._overlap // 2
       post = self._overlap - pre
-      self._context = pre, post  # type: ignore
+      self._context = pre, post
 
   def _context_for_box(
       self, box: bounding_box.BoundingBoxBase) -> Tuple[np.ndarray, np.ndarray]:
