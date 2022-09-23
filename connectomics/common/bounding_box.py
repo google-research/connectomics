@@ -65,9 +65,7 @@ class BoundingBoxBase(Generic[T]):
     Exactly two of start, size, and end must be specified.
 
     Args:
-      start: An N-D element sequence specifying the (inclusive) start bound, or
-        BoundingBox proto/object, in which case no other arguments may be
-        specified.
+      start: An N-D element sequence specifying the (inclusive) start bound.
       size: An N-D element sequence specifying the size.
       end: An N-D element sequence specifying the (exclusive) end bound.
       is_border_start: (xyz) Optional N-D element bool sequence specifying
