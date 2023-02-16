@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 The Google Research Authors.
+# Copyright 2022-2023 The Google Research Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,9 +14,13 @@
 # limitations under the License.
 """Routines for manipulating numpy arrays of segmentation data."""
 
-from typing import Iterable, List, Tuple
+import collections
+from typing import Iterable, Optional, Sequence
 
+import edt
 import numpy as np
+import skimage.morphology
+import skimage.segmentation
 
 
 def relabel(labels: np.ndarray, orig_ids: Iterable[int],
@@ -43,7 +47,7 @@ def relabel(labels: np.ndarray, orig_ids: Iterable[int],
 
 
 def make_contiguous(
-    labels: np.ndarray) -> Tuple[np.ndarray, List[Tuple[int, int]]]:
+    labels: np.ndarray) -> tuple[np.ndarray, list[tuple[int, int]]]:
   """Relabels 'labels' so that its ID space is dense.
 
   If N is the number of unique ids in 'labels', the new IDs will cover the range
@@ -95,3 +99,106 @@ def are_equivalent(label_a: np.ndarray, label_b: np.ndarray) -> bool:
       return False
 
   return True
+
+
+def erode(labels: np.ndarray, radius: int = 2, min_size: int = 50):
+  """Creates empty spaces between segments, while preserving small segments.
+
+  Args:
+    labels: 2D or 3D ndarray of uint64
+    radius: radius to use for erosion operation; 2*r + 1 pixels will separate
+      neighboring segments after erosion, unless the segments are small, in
+      which case the separation might be smaller
+    min_size: erosion will not be applied to segments smaller than this value
+
+  Returns:
+    ndarray with eroded segments; shape is the same as 'labels'
+  """
+  # Nothing to do.
+  if np.all(labels == 0):
+    return labels.copy()
+
+  assert len(labels.shape) in (2, 3)
+  sizes = collections.Counter(labels.flat)
+  small_segments = [
+      segment_id for segment_id, size in sizes.items() if size <= min_size
+  ]
+  eroded = labels.copy()
+  is_2d = len(labels.shape) == 2
+
+  # Introduce a 1 pixel separation between components. This is necessary in
+  # case of densely labeled volumes in order for the erosion morphological
+  # operation to work.
+  #
+  # An alternative would be to apply erosion separately to every object and then
+  # compose the results together to form a single volume. This would incur a
+  # a significant overhead compared to the approach used below.
+  if is_2d:
+    where = (eroded[:, :-1] != eroded[:, 1:]) & (eroded[:, :-1] != 0)
+    eroded[:, 1:][where] = 0
+    where = (eroded[:-1, :] != eroded[1:, :]) & (eroded[:-1, :] != 0)
+    eroded[1:, :][where] = 0
+  else:
+    where = (eroded[:, :, :-1] != eroded[:, :, 1:]) & (eroded[:, :, :-1] != 0)
+    eroded[:, :, 1:][where] = 0
+    where = (eroded[:, :-1, :] != eroded[:, 1:, :]) & (eroded[:, :-1, :] != 0)
+    eroded[:, 1:, :][where] = 0
+    where = (eroded[:-1, :, :] != eroded[1:, :, :]) & (eroded[:-1, :, :] != 0)
+    eroded[1:, :, :][where] = 0
+
+  if radius > 0:
+    if is_2d:
+      struct = skimage.morphology.disk(radius)
+    else:
+      struct = skimage.morphology.ball(radius)
+    eroded = skimage.morphology.erosion(eroded, selem=struct)
+
+  # Preserve small components.
+  mask = np.in1d(labels.flat, small_segments).reshape(labels.shape)
+  eroded[mask] = labels[mask]
+  return eroded
+
+
+def watershed_expand(seg: np.ndarray,
+                     voxel_size: Sequence[float],
+                     max_distance: Optional[float] = None,
+                     mask: Optional[np.ndarray] = None):
+  """Grows existing segments using watershed.
+
+  All segments are grown at an uniform rate, using the Euclidean distance
+  transform of the empty space of the input segmentation. This results in
+  all empty voxels getting assigned the ID of the nearest segment, up to
+  `max_distance`.
+
+  Args:
+    seg: 3d int ZYX array of segmentation data
+    voxel_size: x, y, z voxel size in nm
+    max_distance: max distance in nm to expand the seeds
+    mask: 3d bool array of the same shape as `seg`; positive values define the
+      region where watershed will be applied. If not specified, wastershed is
+      applied everywhere in the subvolume.
+
+  Returns:
+    expanded segmentation, distance transform over the empty space
+    of the original segmentation prior to expansion
+  """
+  # Map to low IDs for watershed to work.
+  seg_low, orig_to_low = make_contiguous(seg)
+  dist_map = edt.edt(seg_low == 0, anisotropy=voxel_size[::-1])
+
+  if mask is None:
+    mask = np.ones(seg_low.shape, dtype=bool)
+
+  if max_distance is not None:
+    mask[dist_map > max_distance] = False
+
+  ws = skimage.segmentation.watershed(
+      dist_map, seg_low, mask=mask).astype(np.uint64)
+
+  # Restore any segment parts that might have been removed by the mask.
+  nmask = np.logical_not(mask)
+  if np.any(nmask):
+    ws[nmask] = seg_low[nmask]
+
+  orig_ids, low_ids = zip(*orig_to_low)
+  return relabel(ws, np.array(low_ids), np.array(orig_ids)), dist_map

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 The Google Research Authors.
+# Copyright 2022-2023 The Google Research Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,6 +51,26 @@ class UtilsTest(absltest.TestCase):
     self.assertTrue(np.all(relabeled[original == (2 << 60)] == 1))
     self.assertTrue(np.all(relabeled[original == 100000] == 2))
     self.assertTrue(np.all(relabeled[original == 30] == 3))
+
+  def test_erode(self):
+    ids = np.zeros((20, 20), dtype=np.uint64)
+    ids[:10, :] = 1
+    ids[10:, :] = 2
+    eroded = labels.erode(ids, min_size=0, radius=1)
+
+    expected = ids.copy()
+    expected[9:12] = 0
+    np.testing.assert_equal(expected, eroded)
+
+  def test_watershed_expand(self):
+    seg = np.random.randint(0, 10, size=(100, 100, 100), dtype=np.uint64)
+    eroded = labels.erode(seg, radius=3)
+
+    # Ignore any objects that were completely removed during erosion.
+    large_enough = np.logical_not(np.in1d(seg.ravel(),
+                                          np.unique(eroded))).reshape(seg.shape)
+    expanded, _ = labels.watershed_expand(seg, voxel_size=(1, 1, 1))
+    np.testing.assert_array_equal(expanded[large_enough], seg[large_enough])
 
 
 if __name__ == '__main__':
