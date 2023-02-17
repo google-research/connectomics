@@ -14,6 +14,7 @@
 # limitations under the License.
 """Module for uncertainty functionality."""
 
+from typing import Tuple
 import numpy as np
 
 
@@ -39,7 +40,7 @@ def calculate_dempster_shafer(logits: np.ndarray) -> np.ndarray:
 def adjust_logits(
     logits: np.ndarray,
     variances: np.ndarray,
-    var_scale: float = 3 / np.pi**2) -> tuple[np.ndarray, np.ndarray]:
+    var_scale: float = 3 / np.pi**2) -> Tuple[np.ndarray, np.ndarray]:
   """Adjusts logits with variance estimates.
 
   Args:
