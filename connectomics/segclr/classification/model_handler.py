@@ -15,7 +15,7 @@
 """Handles training and model storage for model_def."""
 
 import json
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from connectomics.segclr import encoders
 from connectomics.segclr.classification import model_def
@@ -39,8 +39,8 @@ def train_model(
     training_epochs: int = 10000,
     balance_labels: bool = False,
     random_seed: int = 42,
-    model_config: Optional[dict[str, Any]] = None,
-) -> tuple[Any, dict[str, Any], dict[str, Any], tf.keras.Model]:
+    model_config: Optional[Dict[str, Any]] = None,
+) -> Tuple[Any, Dict[str, Any], Dict[str, Any], tf.keras.Model]:
   """Creates and trains a model.
 
   The input parameters determine what model is created.
@@ -178,7 +178,7 @@ def predict_data(
     block_size: int = 50000,
     standardization_mean: float = 0.,
     standardization_std: float = 1.
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
   """Runs prediction on data array.
 
   Args:
@@ -219,13 +219,13 @@ def predict_data(
 
 
 def save_model(model: tf.keras.Model,
-               model_config: dict[str, Any],
+               model_config: Dict[str, Any],
                out_dir: str,
                train_history: Optional[tf.keras.callbacks.History] = None,
-               train_config: Optional[dict[str, Any]] = None,
+               train_config: Optional[Dict[str, Any]] = None,
                standardization_mean: Optional[np.ndarray] = None,
                standardization_std: Optional[np.ndarray] = None,
-               emb_model_strs: Optional[list[str]] = None,
+               emb_model_strs: Optional[List[str]] = None,
                var_scale: Optional[float] = None):
   """Saves a model and additional parameters.
 
@@ -271,7 +271,7 @@ def save_model(model: tf.keras.Model,
       json.dump(keras_history, f, cls=encoders.NumpyEncoder)
 
 
-def load_model(out_dir: str) -> tuple[tf.keras.Model, dict[str, Any]]:
+def load_model(out_dir: str) -> Tuple[tf.keras.Model, Dict[str, Any]]:
   """Loads a model.
 
   Args:

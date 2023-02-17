@@ -16,7 +16,7 @@
 
 import collections
 import json
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 from absl import logging
 from connectomics.segclr import encoders
@@ -29,7 +29,7 @@ from tensorflow.io import gfile
 
 
 def summarize_result_dicts(
-    result_dicts: list[dict[str, Any]]) -> dict[str, Any]:
+    result_dicts: List[Dict[str, Any]]) -> Dict[str, Any]:
   """Computes summary statistics for results.
 
   Args:
@@ -55,7 +55,7 @@ def save_predictions(model_dir: str,
                      logits: np.ndarray,
                      labels: np.ndarray,
                      test_idx: np.ndarray,
-                     add_test_data: Optional[dict[str, np.ndarray]] = None):
+                     add_test_data: Optional[Dict[str, np.ndarray]] = None):
   """Saves test predictions for a trained model.
 
   Args:
@@ -95,13 +95,13 @@ def evaluate_train_test(labels_train: np.ndarray,
                         model_id_str: str,
                         standardization_mean: np.ndarray,
                         standardization_std: np.ndarray,
-                        emb_model_strs: Optional[list[str]] = None,
+                        emb_model_strs: Optional[List[str]] = None,
                         upsample_train: bool = False,
                         upsample_test: bool = False,
-                        add_test_data: Optional[dict[str, np.ndarray]] = None,
+                        add_test_data: Optional[Dict[str, np.ndarray]] = None,
                         n_random_states: int = 3,
                         run_id: int = 0,
-                        var_scale: float = 3 / np.pi**2) -> dict[str, Any]:
+                        var_scale: float = 3 / np.pi**2) -> Dict[str, Any]:
   """Trains and evaluates models for a single (sampled) dataset.
 
   Args:
@@ -226,7 +226,7 @@ def evaluate_train_test(labels_train: np.ndarray,
 
 
 def compute_evaluations(
-    data_dict: dict[str, Any],
+    data_dict: Dict[str, Any],
     n_samples: int,
     n_runs: int,
     guarantee_n: int,
@@ -235,8 +235,8 @@ def compute_evaluations(
     model_id_str: str,
     standardization_mean: np.ndarray,
     standardization_std: np.ndarray,
-    emb_model_strs: list[str],
-) -> dict[str, Any]:
+    emb_model_strs: List[str],
+) -> Dict[str, Any]:
   """Manages evaluation.
 
   Args:

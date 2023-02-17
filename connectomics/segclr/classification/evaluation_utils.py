@@ -14,7 +14,7 @@
 # limitations under the License.
 """Utilities for evaluating models."""
 
-from typing import Any, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 from sklearn.metrics import f1_score
@@ -26,7 +26,7 @@ def sample_n(labels: np.ndarray,
              n_samples: int,
              guarantee_n: int = 1,
              secondary_labels: Optional[np.ndarray] = None,
-             secondary_label_weights: Optional[dict[int, float]] = None,
+             secondary_label_weights: Optional[Dict[int, float]] = None,
              random_seed: int = 42) -> Sequence[int]:
   """Samples n samples randomly while guaranteeing a min number from each label.
 
@@ -126,7 +126,7 @@ def recall_scorer(y_true: Sequence[int], y_pred: Sequence[int],
 
 def evaluate_prediction(labels_test: Sequence[int],
                         pred_test: Sequence[int],
-                        incl_per_class: bool = True) -> dict[str, Any]:
+                        incl_per_class: bool = True) -> Dict[str, Any]:
   """Computes evaluation metrics for a prediction.
 
   Args:
