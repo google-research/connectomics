@@ -21,6 +21,8 @@ allow for build-time error checking. This is generally preferable to seeing
 errors at run-time during long-running pipelines.
 """
 
+from __future__ import annotations
+
 from collections import abc
 import numbers
 from typing import Any, Tuple, TypeVar, Type, Union
