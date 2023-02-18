@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections import abc
 import numbers
-from typing import Any, Tuple, TypeVar, Type, Union
+from typing import Any, List, Tuple, TypeVar, Type, Union
 
 from connectomics.common import array_mixins
 import numpy as np
@@ -34,7 +34,7 @@ import numpy.typing as npt
 T = TypeVar('T', int, float)
 
 # TODO(timblakely): Support Ellipses
-CoordinateLookup = Union[np.ndarray, list[int], tuple[int, ...]]
+CoordinateLookup = Union[np.ndarray, List[int], Tuple[int, ...]]
 PointLookups = Tuple[Union[int, slice], CoordinateLookup, CoordinateLookup,
                      CoordinateLookup]
 ArbitrarySlice = Tuple[Union[int, slice], Union[int, slice], Union[int, slice],

@@ -14,6 +14,8 @@
 # limitations under the License.
 """Generate overlapping boxes mapped to a coordinate space."""
 
+from __future__ import annotations
+
 import bisect
 import dataclasses
 import functools

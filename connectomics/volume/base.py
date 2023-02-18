@@ -14,6 +14,8 @@
 # limitations under the License.
 """4-D volume abstraction."""
 
+from __future__ import annotations
+
 import typing
 from typing import Optional, Sequence, Union
 

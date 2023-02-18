@@ -14,6 +14,8 @@
 # limitations under the License.
 """Geometric utilities."""
 
+from __future__ import annotations
+
 import numbers
 from typing import Optional, Sequence
 import numpy as np
