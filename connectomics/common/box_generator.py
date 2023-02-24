@@ -418,30 +418,24 @@ class BoxGenerator(BoxGeneratorBase):
     Yields:
       Bounding boxes that overlap.
     """
-
-    def _start_to_box(start):
-      full_box = self.outer_box.__class__(start=start, size=self.box_size)
-      if self._back_shift_small_boxes:
-        shift = np.maximum(full_box.end - self._outer_box.end, 0)
-        if shift.any():
-          return self.outer_box.__class__(
-              start=full_box.start - shift, size=self.box_size)
-        return full_box
-      else:
-        return full_box.intersection(self._outer_box)
-
-    start_xyz = self.start + np.maximum(
-        0, (box.start - self.start -
-            self._box_size)) // self._box_stride * self._box_stride
+    start_xyz = (np.maximum(0, (box.start - self.start - self._box_size)) //
+                 self._box_stride * self._box_stride)
     end_xyz = box.end + self._box_size
 
     for z in range(start_xyz[2], end_xyz[2], self._box_stride[2]):
       for y in range(start_xyz[1], end_xyz[1], self._box_stride[1]):
         for x in range(start_xyz[0], end_xyz[0], self._box_stride[0]):
-          sub_box = _start_to_box((x, y, z))
-          if sub_box is None or box.intersection(sub_box) is None:
+          try:
+            idx = self.box_coordinate_to_index(
+                (x // self._box_stride[0],
+                 y // self._box_stride[1],
+                 z // self._box_stride[2]))
+          except ValueError:
             continue
-          yield sub_box
+
+          _, sub_box = self._generate(idx)
+          if box.intersection(sub_box) is not None:
+            yield sub_box
 
 
 GeneratorIndex = TypeVar('GeneratorIndex', bound=int)

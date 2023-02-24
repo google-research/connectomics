@@ -311,6 +311,12 @@ class BoxGeneratorTest(absltest.TestCase):
         Box(start=(0, 384, 768), size=size)
     ])
 
+    overlapping = list(
+        calc.overlapping_subboxes(Box(start=(0, 0, 0), size=(1, 1, 1))))
+    self.assertListEqual(overlapping,
+                         [Box(start=(0, 0, 0), size=(256, 256, 256))])
+    self.assertTrue(np.all(overlapping[0].is_border_start))
+
   def test_dataclass(self):
     generator = m.BoxGenerator(
         Box(start=(0, 0, 0), size=(100, 100, 100)),
