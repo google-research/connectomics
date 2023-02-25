@@ -50,8 +50,8 @@ def adjust_logits(
       parameter is usually chosen to be either 3/np.pi**2 or np.pi / 8.
 
   Returns:
-    adjusted logits: variance adjusted logits
     adjusted probas: probabilities derived with softmax from adjusted logits
+    adjusted logits: variance adjusted logits
   """
   adj_logits = logits / np.sqrt(1. + var_scale * variances[:, None])
 
