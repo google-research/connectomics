@@ -19,7 +19,7 @@ from __future__ import annotations
 import functools
 import json
 import typing
-from typing import Any, Callable, TypeVar, Union
+from typing import Any, Callable, Dict, TypeVar, Union
 
 import dataclasses_json
 
@@ -72,7 +72,7 @@ def load_dataclass(constructor: type[T], v: Union[str, dict[str, Any], T,
       with Open(v) as f:
         return constructor.from_json(f.read())
   else:
-    return constructor.from_dict(typing.cast(dict[str, Any], v))
+    return constructor.from_dict(typing.cast(Dict[str, Any], v))
 
 
 def dataclass_loader(

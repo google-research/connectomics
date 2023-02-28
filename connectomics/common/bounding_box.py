@@ -118,20 +118,20 @@ class BoundingBoxBase(Generic[T]):
       if len(is_border_start) != self.rank:
         raise ValueError(
             f'is_border_start needs to have exactly {self.rank} items')
-      self.is_border_start = typing.cast(tuple[bool, ...],
+      self.is_border_start = typing.cast(Tuple[bool, ...],
                                          np.asarray(is_border_start))
     else:
-      self.is_border_start = typing.cast(tuple[bool, ...],
+      self.is_border_start = typing.cast(Tuple[bool, ...],
                                          np.zeros(self.rank, dtype=bool))
 
     if is_border_end is not None:
       if len(is_border_end) != self.rank:
         raise ValueError(
             f'is_border_end needs to have exactly {self.rank} items')
-      self.is_border_end = typing.cast(tuple[bool, ...],
+      self.is_border_end = typing.cast(Tuple[bool, ...],
                                        np.asarray(is_border_end))
     else:
-      self.is_border_end = typing.cast(tuple[bool, ...],
+      self.is_border_end = typing.cast(Tuple[bool, ...],
                                        np.zeros(self.rank, dtype=bool))
 
   def __eq__(self: S, other: S) -> bool:
@@ -473,8 +473,8 @@ def intersections(
     other_box_or_boxes = [other_box_or_boxes]
 
   # Make PyType happy
-  first_box_or_boxes = typing.cast(list[S], first_box_or_boxes)
-  other_box_or_boxes = typing.cast(list[S], other_box_or_boxes)
+  first_box_or_boxes = typing.cast(List[S], first_box_or_boxes)
+  other_box_or_boxes = typing.cast(List[S], other_box_or_boxes)
 
   ret = []
   for box0 in first_box_or_boxes:

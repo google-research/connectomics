@@ -14,7 +14,7 @@
 # limitations under the License.
 """Volume decorators for modifying volumes on-the-fly."""
 
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from connectomics.common import array
 from connectomics.common import bounding_box
@@ -28,7 +28,7 @@ import numpy as np
 #     a class of the same name.
 #   "args": Optional. List of decorator-specific arguments.
 #   "kwargs": Optional. Dict of decorator-specific keyword args.
-DecoratorSpec = dict[str, Any]
+DecoratorSpec = Dict[str, Any]
 
 
 class DecoratorFactory:
