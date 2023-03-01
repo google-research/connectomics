@@ -14,6 +14,7 @@
 # limitations under the License.
 """Tests for connectomics.common.BoundingBox."""
 
+import dataclasses
 from absl.testing import absltest
 from connectomics.common import bounding_box
 import numpy as np
@@ -77,6 +78,12 @@ class BoundingBoxTest(absltest.TestCase):
       Box(start=(1, 2), size=(3, 4, 5))
     with self.assertRaises(ValueError):
       Box(end=(1, 2), size=(3, 4, 5))
+
+  def test_beam_serialization(self):
+    b = Box(end=(4, 5, 6), size=(1, 2, 3))
+    values = [getattr(b, field.name) for field in dataclasses.fields(b)]
+    b2 = Box(*values)
+    self.assertEqual(b, b2)
 
   def test_attribute_setting(self):
     b = Box(start=(0, 1, 2), end=(3, 4, 5))
@@ -283,6 +290,11 @@ class BoundingBoxTest(absltest.TestCase):
       expected_4d = none_slice * (4 - dim_size) + expected_slice
       self.assertEqual(expected_4d, box.to_slice4d())
 
+  def test_hash(self):
+    box = Box(start=[0, 1, 2], end=[10, 20, 30])
+    d = {box: True}
+    self.assertIn(box, d)
+
 
 class GlobalTest(absltest.TestCase):
 
@@ -357,12 +369,12 @@ class GlobalTest(absltest.TestCase):
     9,
     8
   ],
-  "is_border_end": [
+  "is_border_start": [
     false,
     false,
     false
   ],
-  "is_border_start": [
+  "is_border_end": [
     false,
     false,
     false
@@ -384,12 +396,12 @@ class GlobalTest(absltest.TestCase):
     9.0,
     8.0
   ],
-  "is_border_end": [
+  "is_border_start": [
     false,
     false,
     false
   ],
-  "is_border_start": [
+  "is_border_end": [
     false,
     false,
     false

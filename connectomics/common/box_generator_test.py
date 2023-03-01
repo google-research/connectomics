@@ -335,12 +335,12 @@ class BoxGeneratorTest(absltest.TestCase):
       100,
       100
     ],
-    "is_border_end": [
+    "is_border_start": [
       false,
       false,
       false
     ],
-    "is_border_start": [
+    "is_border_end": [
       false,
       false,
       false
@@ -420,12 +420,12 @@ class MultiBoxGeneratorTest(absltest.TestCase):
         20,
         10
       ],
-      "is_border_end": [
+      "is_border_start": [
         false,
         false,
         false
       ],
-      "is_border_start": [
+      "is_border_end": [
         false,
         false,
         false
@@ -442,12 +442,12 @@ class MultiBoxGeneratorTest(absltest.TestCase):
         20,
         10
       ],
-      "is_border_end": [
+      "is_border_start": [
         false,
         false,
         false
       ],
-      "is_border_start": [
+      "is_border_end": [
         false,
         false,
         false

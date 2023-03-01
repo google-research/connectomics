@@ -35,7 +35,7 @@ def limit_encoder(v):
 
 # TODO(timblakely): Move is_border_* out of BoundingBox and into BoxGenerator.
 @dataclasses_json.dataclass_json
-@dataclasses.dataclass(repr=False, eq=False)
+@dataclasses.dataclass(repr=False, eq=False, frozen=True)
 class BoundingBoxBase(Generic[T]):
   """BoundingBox encapsulates start/end coordinate pairs of the same length."""
   _start: Tuple[T, ...] = dataclasses.field(
@@ -45,20 +45,24 @@ class BoundingBoxBase(Generic[T]):
       metadata=dataclasses_json.config(
           field_name='size', encoder=limit_encoder))
   # TODO(timblakely): Move these internal.
-  is_border_end: Optional[Tuple[bool, ...]] = dataclasses.field(
-      default=None, metadata=dataclasses_json.config(encoder=limit_encoder))
-  is_border_start: Optional[Tuple[bool, ...]] = dataclasses.field(
-      default=None, metadata=dataclasses_json.config(encoder=limit_encoder))
+  _is_border_start: Optional[Tuple[bool, ...]] = dataclasses.field(
+      default=None, metadata=dataclasses_json.config(
+          field_name='is_border_start'))
+  _is_border_end: Optional[Tuple[bool, ...]] = dataclasses.field(
+      default=None, metadata=dataclasses_json.config(
+          field_name='is_border_end'))
 
   def __init__(
       self,
       start: Optional[FloatSequence] = None,
       size: Optional[FloatSequence] = None,
-      end: Optional[FloatSequence] = None,
+
       # TODO(timblakely): Move these parameters into the limited upstream
-      # usage, as it's not exaclty specific to BoundingBox
+      # usage, as it's not exactly specific to BoundingBox
       is_border_start: Optional[BoolSequence] = None,
       is_border_end: Optional[BoolSequence] = None,
+
+      end: Optional[FloatSequence] = None,
       **kwargs):
     """Initialize a BoundingBox from explicit bounds.
 
@@ -67,13 +71,13 @@ class BoundingBoxBase(Generic[T]):
     Args:
       start: An N-D element sequence specifying the (inclusive) start bound.
       size: An N-D element sequence specifying the size.
-      end: An N-D element sequence specifying the (exclusive) end bound.
       is_border_start: (xyz) Optional N-D element bool sequence specifying
         whether this box is adjacent to the beginning of the containing volume
         along the respective dimension
       is_border_end: (xyz) Optional N-D element bool sequence specifying whether
         this box is adjacent to the end of the containing volume along the
         respective dimension
+      end: An N-D element sequence specifying the (exclusive) end bound.
       **kwargs: Fields used during dataclass initialization.
 
     Raises:
@@ -84,9 +88,11 @@ class BoundingBoxBase(Generic[T]):
     if size is None and '_size' in kwargs:
       size = kwargs['_size']
     if (end is not None) + (start is not None) + (size is not None) != 2:
-      raise ValueError('Exactly two of start, end, and size must be specified')
+      raise ValueError('Exactly two of start, end, and size must be specified. '
+                       f'Got {start=}, {size=}, {end=}.')
     if not array.is_arraylike(start) and not array.is_arraylike(end):
-      raise ValueError('At least one of start, end must be a sequence')
+      raise ValueError('At least one of start, end must be a sequence. '
+                       f'Got {start=} and {end=}.')
 
     if array.is_arraylike(start):
       start = np.array(start)
@@ -106,8 +112,8 @@ class BoundingBoxBase(Generic[T]):
     else:
       size = end - start
 
-    self._start = self._tupleize(start)
-    self._size = self._tupleize(size)
+    object.__setattr__(self, '_start', self._tupleize(start))
+    object.__setattr__(self, '_size', self._tupleize(size))
 
     if len(self.start) != len(self.end) or len(self.end) != len(self.start):
       raise ValueError(
@@ -118,21 +124,19 @@ class BoundingBoxBase(Generic[T]):
       if len(is_border_start) != self.rank:
         raise ValueError(
             f'is_border_start needs to have exactly {self.rank} items')
-      self.is_border_start = typing.cast(Tuple[bool, ...],
-                                         np.asarray(is_border_start))
+      object.__setattr__(self, '_is_border_start',
+                         tuple(np.asarray(is_border_start).tolist()))
     else:
-      self.is_border_start = typing.cast(Tuple[bool, ...],
-                                         np.zeros(self.rank, dtype=bool))
+      object.__setattr__(self, '_is_border_start', tuple([False] * self.rank))
 
     if is_border_end is not None:
       if len(is_border_end) != self.rank:
         raise ValueError(
             f'is_border_end needs to have exactly {self.rank} items')
-      self.is_border_end = typing.cast(Tuple[bool, ...],
-                                       np.asarray(is_border_end))
+      object.__setattr__(self, '_is_border_end',
+                         tuple(np.asarray(is_border_end).tolist()))
     else:
-      self.is_border_end = typing.cast(Tuple[bool, ...],
-                                       np.zeros(self.rank, dtype=bool))
+      object.__setattr__(self, '_is_border_end', tuple([False] * self.rank))
 
   def __eq__(self: S, other: S) -> bool:
     for k, v in self.__dict__.items():
@@ -140,7 +144,7 @@ class BoundingBoxBase(Generic[T]):
         return False
 
       # TODO(timblakely): Do we want to count is_border_* in equality?
-      if k.startswith('is_border_'):
+      if k.startswith('_is_border_'):
         continue
 
       if isinstance(v, np.ndarray):
@@ -151,6 +155,9 @@ class BoundingBoxBase(Generic[T]):
           return False
 
     return True
+
+  def __hash__(self: S) -> int:
+    return hash((self._start, self._size))
 
   def _tupleize(self: S, seq: Sequence[float]) -> Tuple[T, ...]:
     """Convert sequence to a correctly-typed tuple.
@@ -196,6 +203,14 @@ class BoundingBoxBase(Generic[T]):
   @property
   def size(self: S) -> array.ImmutableArray:
     return self._as_immutablearray(self._size)
+
+  @property
+  def is_border_start(self: S) -> array.ImmutableArray:
+    return array.ImmutableArray(np.asarray(self._is_border_start))
+
+  @property
+  def is_border_end(self: S) -> array.ImmutableArray:
+    return array.ImmutableArray(np.asarray(self._is_border_end))
 
   def scale(self: S, scale_factor: FloatSequence) -> S:
     """Returns a new BoundingBox, scaled relative to this one.
@@ -426,14 +441,16 @@ class BoundingBoxBase(Generic[T]):
     return self.__class__(start=start, end=end)
 
   def __repr__(self):
-    return (f'BoundingBox(start={self.start.tolist()}, '
-            f'end={self.end.tolist()}, size={self.size.tolist()})')
+    return (f'{self.__class__.__name__}(start={self._start}, '
+            f'size={self._size}, '
+            f'is_border_start={self._is_border_start}, '
+            f'is_border_end={self._is_border_end})')
 
 
 class BoundingBox(BoundingBoxBase[int]):
 
   def _tupleize(self, seq: Sequence[float]) -> Tuple[int, ...]:
-    return tuple(np.array(seq, dtype=int))
+    return tuple(np.array(seq, dtype=int).tolist())
 
   def _as_ndarray(self, seq: Sequence[float]) -> np.ndarray:
     return np.array(seq, dtype=int)
@@ -442,7 +459,7 @@ class BoundingBox(BoundingBoxBase[int]):
 class FloatBoundingBox(BoundingBoxBase[float]):
 
   def _tupleize(self, seq: Sequence[float]) -> Tuple[float, ...]:
-    return tuple(np.array(seq, dtype=float))
+    return tuple(np.array(seq, dtype=float).tolist())
 
   def _as_ndarray(self, seq: Sequence[float]) -> np.ndarray:
     return np.array(seq, dtype=float)
