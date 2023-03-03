@@ -18,7 +18,7 @@ import collections
 import dataclasses
 import enum
 import importlib
-from typing import Any, Tuple, Optional, Union
+from typing import Any, List, Tuple, Optional, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
@@ -34,6 +34,7 @@ Subvolume = subvolume.Subvolume
 SuggestedXyz = collections.namedtuple('SuggestedXyz', 'x y z')
 TupleOrSuggestedXyz = Union['XyzTuple', SuggestedXyz]  # pylint: disable=invalid-name
 XyzTuple = array.Tuple3i
+SubvolumeOrMany = Union[Subvolume, List[Subvolume]]
 
 
 @dataclasses.dataclass
@@ -152,7 +153,7 @@ class SubvolumeProcessor:
 
   def process(
       self, subvol: subvolume.Subvolume
-  ) -> Union[subvolume.Subvolume, list[subvolume.Subvolume]]:
+  ) -> SubvolumeOrMany:
     """Processes the input subvolume.
 
     Args:
