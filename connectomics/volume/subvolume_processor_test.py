@@ -30,9 +30,9 @@ class SubvolumeProcessorTest(absltest.TestCase):
 
   def test_output_type(self):
     p = Processor()
-    self.assertEqual(np.uint8, p.output_type(np.uint8))
-    self.assertEqual(np.uint64, p.output_type(np.uint64))
-    self.assertEqual(np.float32, p.output_type(np.float32))
+    self.assertEqual(np.uint8, p.output_type(np.uint8))  # pytype: disable=wrong-arg-types  # numpy-scalars
+    self.assertEqual(np.uint64, p.output_type(np.uint64))  # pytype: disable=wrong-arg-types  # numpy-scalars
+    self.assertEqual(np.float32, p.output_type(np.float32))  # pytype: disable=wrong-arg-types  # numpy-scalars
 
   def test_output_num(self):
     p = Processor()
