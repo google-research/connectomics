@@ -151,7 +151,7 @@ def erode(labels: np.ndarray, radius: int = 2, min_size: int = 50):
       struct = skimage.morphology.disk(radius)
     else:
       struct = skimage.morphology.ball(radius)
-    eroded = skimage.morphology.erosion(eroded, selem=struct)
+    eroded = skimage.morphology.erosion(eroded, footprint=struct)
 
   # Preserve small components.
   mask = np.in1d(labels.flat, small_segments).reshape(labels.shape)
