@@ -116,8 +116,8 @@ def evaluate_train_test(labels_train: np.ndarray,
     out_path: path where to store the model
     model_name: name of the model. See ../classification/model_configs for
       possible model names
-    model_id_str: unique identifier for the model in this in run. This is
-      required because parallel models are beiing trained and stored in the same
+    model_id_str: unique identifier for the model in this run. This is
+      required because parallel models are being trained and stored in the same
       folder.
     standardization_mean: numpy array of length equal to the number of embedding
       dimensions containin the original mean values of each dimension
