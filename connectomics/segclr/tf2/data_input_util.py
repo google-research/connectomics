@@ -81,18 +81,10 @@ def discover_feature_dict(filenames: Sequence[str]) -> dict[str, Any]:
 
   likely_keys_collection = []
   for filename in filenames:
-    # BEGIN GOOGLE-INTERNAL
-    from google3.file.recordio.python import recordio  # pylint:disable=g-import-not-at-top
-    with recordio.RecordReader(filename) as rr:
-      feature = tf.train.Example.FromString(rr.next()).features.feature
-    likely_keys_collection.extend(feature.keys())
-    continue
-    # pylint:disable=unreachable
-    # END GOOGLE-INTERNAL
-
     dataset = tf.data.TFRecordDataset(filename)
     for record in dataset.take(1):
       feature = tf.train.Example.FromString(record.numpy()).features.feature
+    del dataset
     likely_keys_collection.extend(feature.keys())
 
   likely_keys_unique, likely_keys_counts = np.unique(

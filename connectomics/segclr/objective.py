@@ -175,9 +175,6 @@ def collect_overall_results(hidden, hidden_norm=True, tpu_context=None):
   return prob_entropy, logit_entropy, topk_acc, std_x_sqrtd
 
 
-# BEGIN GOOGLE-INTERNAL
-# From //video/content_analysis/match/tensorflow/python/utils/tpu_utils.py.
-# END GOOGLE-INTERNAL
 def tpu_cross_replica_concat(tensor, tpu_context=None):
   """Reduce a concatenation of the `tensor` across TPU cores.
 
