@@ -378,6 +378,12 @@ class BoxGeneratorTest(absltest.TestCase):
       self.assertEqual(list(box.is_border_start), list(is_start))
       self.assertEqual(list(box.is_border_end), list(is_end))
 
+  def test_overlap_exceeds_outer_box(self):
+    calc = m.BoxGenerator(
+        Box(start=(0, 0, 0), size=(512, 512, 128)), box_size=(512, 512, 512),
+        box_overlap=(128, 128, 128))
+    self.assertEqual(calc.num_boxes, 1)
+
 
 class MultiBoxGeneratorTest(absltest.TestCase):
 

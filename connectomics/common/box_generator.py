@@ -167,8 +167,12 @@ class BoxGenerator(BoxGeneratorBase):
           'box_size must be greater than box_overlap: %r versus %r' %
           (box_size, box_overlap))
 
+    # Don't allow this to be >= outer_box.size as that will incorrectly result
+    # in output_shape 0.
+    back_clip = np.minimum(box_overlap, outer_box.size - 1)
+
     # The output_shape is the number of output boxes generated.
-    output_shape = -(-(outer_box.size - box_overlap) // box_stride)
+    output_shape = -(-(outer_box.size - back_clip) // box_stride)
 
     self._outer_box = outer_box
     self._output = bounding_box.BoundingBox(
