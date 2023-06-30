@@ -22,8 +22,8 @@ from typing import Any, Optional, Union
 from connectomics.common import file
 from connectomics.common import utils
 from connectomics.volume import base
-from connectomics.volume import decorator
 from connectomics.volume import tensorstore as tsv
+from connectomics.volume import tsv_decorator
 import dataclasses_json
 
 
@@ -35,7 +35,7 @@ class VolumeDescriptor(utils.NPDataClassJsonMixin):
   # decorator.from_specs. E.g.:
   #   '[{"decorator": "ZSub", "args": [{"2198": 2197}]}]'
   # If left unspecified, the undecorated volume is used.
-  decorator_specs: list[decorator.DecoratorSpec] = dataclasses.field(
+  decorator_specs: list[tsv_decorator.DecoratorSpec] = dataclasses.field(
       default_factory=list)
 
   # Exactly one of `volumeinfo` or `tensorstore_config` must be specified
@@ -91,4 +91,4 @@ def open_descriptor(
 
   config = typing.cast(tsv.TensorstoreConfig, config)
   volume = tsv.TensorstoreVolume(config)
-  return decorator.from_specs(volume, spec.decorator_specs)
+  return tsv_decorator.from_specs(volume, spec.decorator_specs)

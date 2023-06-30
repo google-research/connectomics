@@ -176,6 +176,7 @@ class Upsample(VolumeDecorator):
     scaled_slice = list(slices)
     for i in range(1, 4):
       begin = slices[i].start // self.scale_zyx[i - 1]
+      assert slices[i].stop is not None
       end = ceildiv(slices[i].stop, self.scale_zyx[i - 1])
       scaled_slice[i] = np.s_[begin:end]
     low_res = self._wrapped.get_slices(tuple(scaled_slice))

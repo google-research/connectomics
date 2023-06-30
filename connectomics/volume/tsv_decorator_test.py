@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for subvolume_processor."""
+"""Tests for tsv_decorator."""
 
 import typing
 from typing import Any, Sequence, Tuple
@@ -21,8 +21,8 @@ from absl.testing import absltest
 from connectomics.common import array
 from connectomics.common import bounding_box
 from connectomics.volume import base as base_volume
-from connectomics.volume import decorator
 from connectomics.volume import descriptor as vd
+from connectomics.volume import tsv_decorator
 import numpy as np
 import numpy.testing as npt
 
@@ -110,7 +110,7 @@ class DecoratorTest(absltest.TestCase):
   def test_upscale(self):
     vol, bbox, data = _make_dummy_vol()
     scale = np.array((2, 2, 1))
-    upscaled = decorator.Upsample(vol, scale)
+    upscaled = tsv_decorator.Upsample(vol, scale)
     self.assertEqual((6000, 4000, 1000), tuple(upscaled.volume_size))
     self.assertEqual((4., 4., 33.), tuple(upscaled.voxel_size))
     self.assertEqual((1, 1000, 4000, 6000), tuple(upscaled.shape))
@@ -127,11 +127,11 @@ class DecoratorTest(absltest.TestCase):
     self.assertFalse(np.all(upscaled[0, 1:3, 3:5, 10].data == expected))
 
 
-class CustomDecorator(decorator.VolumeDecorator):
+class CustomDecorator(tsv_decorator.VolumeDecorator):
   pass
 
 
-class CustomDecoratorFactory(decorator.DecoratorFactory):
+class CustomDecoratorFactory(tsv_decorator.DecoratorFactory):
   called: bool = False
 
   def __init__(self, *args, **kwargs):
@@ -139,11 +139,11 @@ class CustomDecoratorFactory(decorator.DecoratorFactory):
 
   def make_decorator(self, wrapped_volume: base_volume.BaseVolume, name: str,
                      *args: list[Any],
-                     **kwargs: dict[str, Any]) -> decorator.VolumeDecorator:
+                     **kwargs: dict[str, Any]) -> tsv_decorator.VolumeDecorator:
     if name == 'CustomDecorator':
       self.called = True
       return CustomDecorator(wrapped_volume)
-    return decorator.GlobalsDecoratorFactory().make_decorator(
+    return tsv_decorator.GlobalsDecoratorFactory().make_decorator(
         wrapped_volume, name, *args, **kwargs)
 
 
@@ -157,10 +157,10 @@ class DecoratorFactoryTest(absltest.TestCase):
           }]
         }""")
     vol, _, _ = _make_dummy_vol()
-    decorated = decorator.from_specs(vol, descriptor.decorator_specs)
-    self.assertIsInstance(decorated, decorator.Upsample)
+    decorated = tsv_decorator.from_specs(vol, descriptor.decorator_specs)
+    self.assertIsInstance(decorated, tsv_decorator.Upsample)
 
-    # Ensure it loads only from `globals()`, aka decorator.py.
+    # Ensure it loads only from `globals()`, aka tsv_decorator.py.
     descriptor: vd.VolumeDescriptor = vd.VolumeDescriptor.from_json("""{
           "decorator_specs": [{
             "decorator": "CustomDecorator"
@@ -168,7 +168,7 @@ class DecoratorFactoryTest(absltest.TestCase):
         }""")
 
     with self.assertRaises(KeyError):
-      decorated = decorator.from_specs(vol, descriptor.decorator_specs)
+      decorated = tsv_decorator.from_specs(vol, descriptor.decorator_specs)
 
   def test_custom_loader(self):
 
@@ -181,7 +181,7 @@ class DecoratorFactoryTest(absltest.TestCase):
     vol, _, _ = _make_dummy_vol()
     factory = CustomDecoratorFactory()
 
-    decorated = decorator.from_specs(
+    decorated = tsv_decorator.from_specs(
         vol, descriptor.decorator_specs, decorator_factory=factory)
     self.assertIsInstance(decorated, CustomDecorator)
     self.assertIs(decorated._wrapped, vol)
@@ -202,11 +202,11 @@ class DecoratorFactoryTest(absltest.TestCase):
     vol, _, _ = _make_dummy_vol()
     factory = CustomDecoratorFactory()
 
-    decorated = decorator.from_specs(
+    decorated = tsv_decorator.from_specs(
         vol, descriptor.decorator_specs, decorator_factory=factory)
     self.assertIsInstance(decorated, CustomDecorator)
-    self.assertIsInstance(decorated._wrapped, decorator.Upsample)
-    decorated = typing.cast(decorator.VolumeDecorator, decorated._wrapped)
+    self.assertIsInstance(decorated._wrapped, tsv_decorator.Upsample)
+    decorated = typing.cast(tsv_decorator.VolumeDecorator, decorated._wrapped)
     self.assertIsInstance(decorated._wrapped, DummyVolume)
     self.assertIs(decorated._wrapped, vol)
     self.assertTrue(factory.called)
