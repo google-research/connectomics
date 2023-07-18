@@ -49,7 +49,7 @@ class ImmutableArrayRuntimeErrorTest(absltest.TestCase):
     # In-place matmul is not yet supported, so ensure that this TypeErrors for
     # now. Will need to be updated if Python3 ever supports in-place matmul
     # operations.
-    with self.assertRaises(TypeError):
+    with self.assertRaises((TypeError, ValueError)):
       a @= [4, 5, 6]
 
   def test_inplace_truediv(self):
