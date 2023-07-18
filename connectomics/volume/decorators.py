@@ -1243,7 +1243,8 @@ class MultiscaleWrite(Writer):
                            self._output_base_spec_overrides, dryrun))
 
     s0_spec_overrides = self._output_base_spec_overrides.copy()
-    s0_spec_overrides['kvstore'] = self._output_base_spec.kvstore / 's0'
+    s0_spec_overrides['kvstore'] = (
+        self._output_base_spec.kvstore / 's0').to_json()
     self._chain = [Write(s0_spec_overrides,
                          keep_existing_chunks=self._keep_existing_chunks)]
     for i, sdf in enumerate(self._sequential_downsample_factors):
@@ -1254,7 +1255,7 @@ class MultiscaleWrite(Writer):
       spec_overrides = dict(
           create=True,
           driver=self._output_base_spec_overrides['driver'],
-          kvstore=self._output_base_spec.kvstore / f's{i + 1}',
+          kvstore=(self._output_base_spec.kvstore / f's{i + 1}').to_json(),
           schema=dict(
               chunk_layout=self._output_base_spec.chunk_layout.to_json()))
       write = Write(
