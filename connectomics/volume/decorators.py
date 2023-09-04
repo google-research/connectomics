@@ -650,6 +650,21 @@ class ThresholdFilter(Filter):
 
 
 @gin.register
+class ClipFilter(Filter):
+  """Clips image to min and max values."""
+
+  def __init__(self,
+               min_chunksize: Optional[Sequence[int]] = None,
+               context_spec: Optional[MutableJsonSpec] = None,
+               **filter_args):
+    super().__init__(
+        filter_fun=np.clip,
+        context_spec=context_spec,
+        min_chunksize=min_chunksize,
+        **filter_args)
+
+
+@gin.register
 class Interpolation(Decorator):
   """Interpolates input TensorStore."""
 

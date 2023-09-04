@@ -243,6 +243,16 @@ class DecoratorsTest(absltest.TestCase):
     np.testing.assert_equal(
         res, decorators._threshold(np.array(self._data), **filter_args))
 
+  def test_clip_filter(self):
+    filter_args = {'a_min': 0.5, 'a_max': None}
+    dec = decorators.ClipFilter(
+        min_chunksize=self._data.shape, **filter_args)
+    vc = dec.decorate(self._data)
+    res = vc[...].read().result()
+    np.testing.assert_equal(
+        res, np.clip(np.array(self._data), **filter_args))
+    self.assertTrue(np.any(np.not_equal(res, self._data)))
+
   def test_max_projection(self):
     for projection_dim in (0, 1):
       dec = decorators.MaxProjection(projection_dim=projection_dim)
