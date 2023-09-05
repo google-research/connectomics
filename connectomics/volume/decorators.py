@@ -664,6 +664,28 @@ class ClipFilter(Filter):
         **filter_args)
 
 
+def _standardize(
+    data: np.ndarray, mean: float, std: float
+) -> np.ndarray:
+  """Standardizes data given mean and standard deviation estimate."""
+  return (data - mean) / std
+
+
+@gin.register
+class StandardizeFilter(Filter):
+  """Standardizes volume based on provided mean and standard deviation."""
+
+  def __init__(self,
+               min_chunksize: Optional[Sequence[int]] = None,
+               context_spec: Optional[MutableJsonSpec] = None,
+               **filter_args):
+    super().__init__(
+        filter_fun=_standardize,
+        context_spec=context_spec,
+        min_chunksize=min_chunksize,
+        **filter_args)
+
+
 @gin.register
 class Interpolation(Decorator):
   """Interpolates input TensorStore."""
