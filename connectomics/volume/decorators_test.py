@@ -472,6 +472,112 @@ class DecoratorsTest(absltest.TestCase):
         vc[...].read().result())
 
 
+def get_written_tensorstores(
+    multiscale_writer: decorators.MultiscaleWrite
+) -> [ts.TensorStore]:
+  tensorstores = []
+  for dec in multiscale_writer._chain:
+    if isinstance(dec, decorators.Writer):
+      tensorstores.append(dec._output_ts)
+  return tensorstores
+
+
+class MultiscaleWriteTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self._input_ts = ts.open({
+        'driver': 'n5',
+        'kvstore': {'driver': 'memory'},
+        'metadata': {'dataType': 'float64', 'dimensions': (4, 4)},
+        'schema': {'dimension_units': ['5um', '6nm'],
+                   'domain': {'labels': ['x', 'y']}},
+        'create': True,
+    }).result()
+    self._example_data = np.arange(16, dtype=np.float64).reshape((4, 4))
+    self._input_ts[...] = self._example_data
+    self._input_spec = dict(driver='n5', schema=self._input_ts.schema.to_json())
+    self._ds_factors = [[2, 2], [2, 2]]  # 4 x 4 -> 2 x 2 -> 1 x 1
+    self._ms_spec = dict(
+        downsamplingFactors=[[1, 1], [2, 2], [4, 4]],
+        axes=('x', 'y'),
+        units=['um', 'nm'],
+        resolution=[5, 6]
+    )
+
+  def test_multiscale_write(self):
+    overwrite_base_spec = {
+        'driver': 'n5', 'create': True, 'kvstore': {'driver': 'memory'},
+    }
+    dec = decorators.MultiscaleWrite(
+        overwrite_base_spec, self._ds_factors, downsample_method='max')
+    dec.initialize(self._input_spec, self._input_ts, dryrun=False)
+    dec_ts = dec.decorate(self._input_ts)
+    self.assertEqual(dec_ts.shape, (1, 1))
+    self.assertEqual(dec_ts[0, 0].read().result(), np.max(self._example_data))
+    written_ts = get_written_tensorstores(dec)
+    self.assertEqual(written_ts[0].shape, self._input_ts.shape)
+    self.assertEqual(written_ts[1].shape, (2, 2))
+    self.assertEqual(written_ts[2].shape, (1, 1))
+    true_units = [ts.Unit('20um'), ts.Unit('24nm')]
+    for true_unit, ds_unit in zip(true_units, written_ts[2].dimension_units):
+      self.assertEqual(true_unit, ds_unit)
+    for mspec_key in ['axes', 'units', 'resolution', 'downsamplingFactors']:
+      self.assertEqual(dec.multiscale_spec[mspec_key], self._ms_spec[mspec_key])
+
+  def test_multiscale_write_to_zarr(self):
+    overwrite_base_spec = {
+        'driver': 'zarr',
+        'create': True,
+        'kvstore': {'driver': 'memory'},
+        'schema': {
+            'dimension_units': decorators.SpecAction.CLEAR,
+            'codec': {
+                'driver': 'zarr',
+                'compression': decorators.SpecAction.CLEAR,
+                'compressor': {
+                    'id': 'blosc',
+                    'cname': 'zstd',
+                    'clevel': 9
+                }
+            }
+        }
+    }
+    dec = decorators.MultiscaleWrite(
+        overwrite_base_spec, self._ds_factors, downsample_method='max')
+    dec.initialize(self._input_spec, self._input_ts, dryrun=False)
+    dec_ts = dec.decorate(self._input_ts)
+    self.assertEqual(dec_ts.shape, (1, 1))
+    self.assertEqual(dec_ts[0, 0].read().result(), np.max(self._example_data))
+    written_ts = get_written_tensorstores(dec)
+    self.assertEqual(written_ts[1].shape, (2, 2))
+    self.assertEqual(written_ts[2].shape, (1, 1))
+    wspec = written_ts[0].schema.to_json()
+    self.assertEqual(wspec['codec']['driver'], 'zarr')
+    self.assertEqual(wspec['codec']['compressor']['clevel'], 9)
+    for mspec_key in ['axes', 'units', 'resolution', 'downsamplingFactors']:
+      self.assertEqual(dec.multiscale_spec[mspec_key], self._ms_spec[mspec_key])
+
+  def test_multiscale_without_units(self):
+    # when neither input nor override spec contains unit information
+    input_ts = ts.open({
+        'driver': 'n5',
+        'kvstore': {'driver': 'memory'},
+        'metadata': {'dataType': 'float64', 'dimensions': (4, 4)},
+        'create': True
+    }).result()
+    input_ts[...] = self._example_data
+    overwrite_base_spec = {
+        'driver': 'n5', 'create': True, 'kvstore': {'driver': 'memory'},
+    }
+    input_spec = dict(driver='n5', schema=input_ts.schema.to_json())
+    dec = decorators.MultiscaleWrite(
+        overwrite_base_spec, self._ds_factors, downsample_method='max')
+    dec.initialize(input_spec, input_ts, dryrun=False)
+    self.assertNotIn('units', dec.multiscale_spec)
+    self.assertNotIn('resolution', dec.multiscale_spec)
+
+
 class MergeSpecsTest(absltest.TestCase):
   # Base is built from a decorated virtual_chunked and has TensorStore default
   # compression.

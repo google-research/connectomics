@@ -1212,11 +1212,14 @@ class Write(Writer):
       if self._keep_existing_chunks:
         existing_data = self._output_ts[domain].read().result()
         if existing_data.sum() != 0.0:
-          resolution = '-'.join(
-              str(u.multiplier)
-              for u in self._output_ts.dimension_units if u is not None)
+          if all(self._output_ts.dimension_units):
+            resolution = '-' + '-'.join(
+                str(u.multiplier) for u in self._output_ts.dimension_units
+            )
+          else:
+            resolution = ''
           COUNTER_STORE.get_counter(
-              f'write-chunk-{resolution}-skipped-existing').inc()
+              f'write-chunk{resolution}-skipped-existing').inc()
           logging.vlog(2, 'Skipping chunk %s; existing data (nonzero)', domain)
           array[...] = existing_data
           return
@@ -1265,6 +1268,8 @@ class MultiscaleWrite(Writer):
     self._output_base_spec = None
     self._chain = None
     self._downsampling_factors = None
+    self._axes = None
+    self._dimension_units = None
 
     self._initialized = False
 
@@ -1273,28 +1278,29 @@ class MultiscaleWrite(Writer):
     if self._initialized:
       raise AssertionError('MultiscaleWrite.initialize called twice.')
 
-    self._downsampling_factors = [[1] * decorated_ts.rank]
-
     self._output_base_spec = ts.Spec(
         _build_output_spec(input_schema_spec, decorated_ts,
                            self._output_base_spec_overrides, dryrun))
+    self._axes = self._output_base_spec.domain.labels
+    if all(self._output_base_spec.dimension_units):
+      self._dimension_units = self._output_base_spec.dimension_units
+    elif all(ts.Spec(input_schema_spec).dimension_units):
+      self._dimension_units = ts.Spec(input_schema_spec).dimension_units
+    else:
+      self._dimension_units = None
 
-    s0_spec_overrides = self._output_base_spec_overrides.copy()
-    s0_spec_overrides['kvstore'] = (
-        self._output_base_spec.kvstore / 's0').to_json()
-    self._chain = [Write(s0_spec_overrides,
-                         keep_existing_chunks=self._keep_existing_chunks)]
-    for i, sdf in enumerate(self._sequential_downsample_factors):
-      self._downsampling_factors.append(
-          list(np.array(sdf) * self._downsampling_factors[-1]))
+    self._downsampling_factors = []
+    self._chain = []
+    cur_ds = [1] * decorated_ts.rank
+    seq_ds_factors = [cur_ds] + list(self._sequential_downsample_factors)
+    for i, sdf in enumerate(seq_ds_factors):
+      self._downsampling_factors.append(list(np.array(sdf) * cur_ds))
+      cur_ds = self._downsampling_factors[-1]
       self._chain.append(Downsample(sdf, self._downsample_method))
 
-      spec_overrides = dict(
-          create=True,
-          driver=self._output_base_spec_overrides['driver'],
-          kvstore=(self._output_base_spec.kvstore / f's{i + 1}').to_json(),
-          schema=dict(
-              chunk_layout=self._output_base_spec.chunk_layout.to_json()))
+      spec_overrides = self._output_base_spec_overrides.copy()
+      spec_overrides['kvstore'] = (
+          self._output_base_spec.kvstore / f's{i}').to_json()
       write = Write(
           spec_overrides, keep_existing_chunks=self._keep_existing_chunks)
       self._chain.append(write)
@@ -1316,17 +1322,18 @@ class MultiscaleWrite(Writer):
 
   @property
   def multiscale_spec(self) -> JsonSpec:
+    """Construct multiscale spec from base spec."""
     if not self._initialized:
       raise AssertionError('MultiscaleWrite.initialize must be called first.')
-    return dict(
+    ms_spec = dict(
         multiScale=True,
         downsamplingFactors=self._downsampling_factors,
-        axes=self._output_base_spec.domain.labels,
-        units=[du.base_unit for du in self._output_base_spec.dimension_units],
-        resolution=[
-            du.multiplier for du in self._output_base_spec.dimension_units
-        ],
+        axes=self._axes
     )
+    if self._dimension_units is not None:
+      ms_spec['units'] = [du.base_unit for du in self._dimension_units]
+      ms_spec['resolution'] = [du.multiplier for du in self._dimension_units]
+    return ms_spec
 
   def post_jsons(self) -> Iterable[tuple[JsonSpec, ts.KvStore.Spec]]:
     if not self._initialized:
