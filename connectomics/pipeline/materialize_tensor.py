@@ -189,11 +189,23 @@ def run(input_spec: MutableJsonSpec = gin.REQUIRED,
     materialize(p)
 
 
+@gin.configurable
+def multirun(steps: Optional[Any] = None):
+  if steps is None:
+    steps = [run]
+  for n, step in enumerate(steps):
+    print(f'step {n+1}/{len(steps)}')
+    if _DRYRUN.value and step.__name__ != run.__name__:
+      print('dry run; step skipped.')
+      continue
+    step()
+
+
 def main(argv: Sequence[str]) -> None:
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
   gin.parse_config_files_and_bindings(_GIN_CONFIG.value, _GIN_BINDINGS.value)
-  run()
+  multirun()
 
 
 if __name__ == '__main__':
