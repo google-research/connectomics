@@ -53,6 +53,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from absl import app
 from absl import flags
+from absl.testing import flagsaver
 import apache_beam as beam
 from connectomics.common import beam_utils
 from connectomics.common import bounding_box
@@ -126,7 +127,8 @@ def materialize_subtensor(box_index: int, box_gen: box_generator.BoxGenerator,
 def run(input_spec: MutableJsonSpec = gin.REQUIRED,
         virtual_decorators: Sequence[decorators.Decorator] = (),
         max_box_bytes: int = int(4e9),
-        pipeline_options: Optional[MutableJsonSpec] = None):
+        pipeline_options: Optional[MutableJsonSpec] = None,
+        extra_flags: Optional[Sequence[tuple[str, Any]]] = None):
   """Set up and run Beam subtensor distributed materialization pipeline."""
   if not isinstance(virtual_decorators[-1], decorators.Writer):
     raise ValueError('Missing write after last operation.')
@@ -183,10 +185,11 @@ def run(input_spec: MutableJsonSpec = gin.REQUIRED,
   if pipeline_options is None:
     pipeline_options = {}
 
-  with beam.Pipeline(
-      options=beam.options.pipeline_options.PipelineOptions.from_dictionary(
-          pipeline_options)) as p:
-    materialize(p)
+  with flagsaver.flagsaver(**extra_flags):
+    with beam.Pipeline(
+        options=beam.options.pipeline_options.PipelineOptions.from_dictionary(
+            pipeline_options)) as p:
+      materialize(p)
 
 
 @gin.configurable
