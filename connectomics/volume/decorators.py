@@ -83,13 +83,21 @@ def _merge_specs(base: MutableJsonSpec, overrides: JsonSpec,
   return base
 
 
-def _adjust_schema_for_chunksize(schema: ts.Schema,
-                                 other_chunksize: Sequence[int]) -> ts.Schema:
+def adjust_schema_for_chunksize(schema: ts.Schema,
+                                other_chunksize: Sequence[int]) -> ts.Schema:
   chunksize = np.lcm(schema.chunk_layout.read_chunk.shape, other_chunksize)
   chunksize = np.minimum(chunksize, schema.shape)
   json = schema.to_json()
   json['chunk_layout']['read_chunk']['shape'] = chunksize
   json['chunk_layout']['write_chunk']['shape'] = chunksize
+  return ts.Schema(json)
+
+
+def adjust_schema_for_virtual_chunked(schema: ts.Schema) -> ts.Schema:
+  json = schema.to_json()
+  for k in ['fill_value']:
+    if k in json:
+      del json[k]
   return ts.Schema(json)
 
 
@@ -231,7 +239,8 @@ class Cast(Decorator):
     json['dtype'] = self._dtype
     schema = ts.Schema(json)
     if self._min_chunksize is not None:
-      schema = _adjust_schema_for_chunksize(schema, self._min_chunksize)
+      schema = adjust_schema_for_chunksize(schema, self._min_chunksize)
+    schema = adjust_schema_for_virtual_chunked(schema)
     return ts.virtual_chunked(read_fn, schema=schema, context=self._context)
 
 
@@ -365,7 +374,8 @@ class Filter(Decorator):
 
     schema = input_ts.schema
     if self._min_chunksize is not None:
-      schema = _adjust_schema_for_chunksize(schema, self._min_chunksize)
+      schema = adjust_schema_for_chunksize(schema, self._min_chunksize)
+    schema = adjust_schema_for_virtual_chunked(schema)
     return ts.virtual_chunked(
         filt_read, schema=schema, context=self._context)
 
@@ -754,8 +764,8 @@ class Interpolation(Decorator):
 
     min_chunksize = [s if s != input_ts.shape[d] else 1
                      for d, s in enumerate(self._size)]
-    schema = _adjust_schema_for_chunksize(ts.Schema(json), min_chunksize)
-
+    schema = adjust_schema_for_chunksize(ts.Schema(json), min_chunksize)
+    schema = adjust_schema_for_virtual_chunked(schema)
     return ts.virtual_chunked(read_fn, schema=schema, context=self._context)
 
 
@@ -808,7 +818,8 @@ class Projection(Decorator):
       array[...] = self._projection_fn(
           data, axis=self._projection_dim, **self._projection_args)
 
-    projected_schema = input_ts.schema[ts.d[self._projection_dim][0]]
+    schema = adjust_schema_for_virtual_chunked(input_ts.schema)
+    projected_schema = schema[ts.d[self._projection_dim][0]]
     return ts.virtual_chunked(
         projected_read, schema=projected_schema, context=self._context)
 
@@ -877,8 +888,9 @@ class MultiplyPointwise(Decorator):
                 unused_read_params: ts.VirtualChunkedReadParameters):
       array[...] = np.array(input_ts[domain]) * np.array(multiply_ts[domain])
 
+    schema = adjust_schema_for_virtual_chunked(input_ts.schema)
     return ts.virtual_chunked(
-        read_fn, schema=input_ts.schema, context=self._context)
+        read_fn, schema=schema, context=self._context)
 
 
 def _expand_domain(
@@ -1121,7 +1133,7 @@ class ObjectsContext(Decorator):
     input_spec = dict(schema=input_ts.schema.to_json())
     schema = ts.Schema(_merge_specs(input_spec['schema'],
                                     self._spec_overrides['schema'], {}))
-
+    schema = adjust_schema_for_virtual_chunked(schema)
     return ts.virtual_chunked(read_fn, schema=schema, context=self._context)
 
 
@@ -1229,8 +1241,9 @@ class Write(Writer):
       self._output_ts[domain] = data
       array[...] = data
 
-    schema = _adjust_schema_for_chunksize(
+    schema = adjust_schema_for_chunksize(
         input_ts.schema, self._output_ts.chunk_layout.read_chunk.shape)
+    schema = adjust_schema_for_virtual_chunked(schema)
     return ts.virtual_chunked(
         side_write_read, schema=schema, context=self._context)
 
