@@ -392,7 +392,7 @@ def _active_contours_mask(
       _cast_img(data, 'float64').squeeze(),
       num_iter=num_iter_chan_vese).astype(bool)
   if background is not None:
-    mask = ~mask if mask[background] else mask
+    mask = ~mask if mask[background].all() else mask
   if num_iter_erosion > 0:
     mask = scipy.ndimage.binary_erosion(mask, iterations=num_iter_erosion)
   if num_iter_dilation > 0:
