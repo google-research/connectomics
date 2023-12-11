@@ -185,6 +185,7 @@ def run(input_spec: MutableJsonSpec = gin.REQUIRED,
   if pipeline_options is None:
     pipeline_options = {}
 
+  extra_flags = extra_flags if extra_flags is not None else {}
   with flagsaver.flagsaver(**extra_flags):
     with beam.Pipeline(
         options=beam.options.pipeline_options.PipelineOptions.from_dictionary(
