@@ -31,6 +31,7 @@ import gin
 import jax
 import numpy as np
 import scipy.ndimage
+import scipy.stats
 import skimage.feature
 import tensorstore as ts
 from typing_extensions import Protocol
@@ -516,6 +517,21 @@ class LabelFilter(Filter):
 
 
 @gin.register
+class Log1pFilter(Filter):
+  """Applies log(1+x)."""
+
+  def __init__(self,
+               min_chunksize: Optional[Sequence[int]] = None,
+               context_spec: Optional[MutableJsonSpec] = None,
+               **filter_args):
+    super().__init__(
+        filter_fun=np.log1p,
+        context_spec=context_spec,
+        min_chunksize=min_chunksize,
+        **filter_args)
+
+
+@gin.register
 class MedianFilter(Filter):
   """Runs median filter over image."""
 
@@ -631,6 +647,25 @@ class PercentileFilter(Filter):
         **filter_args)
 
 
+def _scale(data: np.ndarray, factor: float) -> np.ndarray:
+  return data * factor
+
+
+@gin.register
+class ScaleFilter(Filter):
+  """Scales data."""
+
+  def __init__(self,
+               min_chunksize: Optional[Sequence[int]] = None,
+               context_spec: Optional[MutableJsonSpec] = None,
+               **filter_args):
+    super().__init__(
+        filter_fun=_scale,
+        context_spec=context_spec,
+        min_chunksize=min_chunksize,
+        **filter_args)
+
+
 def _threshold(
     data: np.ndarray, threshold: Union[int, float], indices: bool = False
 ) -> np.ndarray:
@@ -691,6 +726,21 @@ class StandardizeFilter(Filter):
                **filter_args):
     super().__init__(
         filter_fun=_standardize,
+        context_spec=context_spec,
+        min_chunksize=min_chunksize,
+        **filter_args)
+
+
+@gin.register
+class ZScoreFilter(Filter):
+  """Applies z-scoring based on calculated mean and standard deviation."""
+
+  def __init__(self,
+               min_chunksize: Optional[Sequence[int]] = None,
+               context_spec: Optional[MutableJsonSpec] = None,
+               **filter_args):
+    super().__init__(
+        filter_fun=scipy.stats.zscore,
         context_spec=context_spec,
         min_chunksize=min_chunksize,
         **filter_args)

@@ -140,6 +140,16 @@ class DecoratorsTest(absltest.TestCase):
             np.array(data), mode='equalize_adapthist', cast_float64=True,
             **filter_args))
 
+  def test_clip_filter(self):
+    filter_args = {'a_min': 0.5, 'a_max': None}
+    dec = decorators.ClipFilter(
+        min_chunksize=self._data.shape, **filter_args)
+    vc = dec.decorate(self._data)
+    res = vc[...].read().result()
+    np.testing.assert_equal(
+        res, np.clip(np.array(self._data), **filter_args))
+    self.assertTrue(np.any(np.not_equal(res, self._data)))
+
   def test_gaussian_filter(self):
     filter_args = {'sigma': [1.] * self._data.ndim}
     dec = decorators.GaussianFilter(
@@ -156,6 +166,12 @@ class DecoratorsTest(absltest.TestCase):
     np.testing.assert_equal(
         vc[...].read().result(),
         decorators._label_filter(np.array(self._data)))
+
+  def test_log1p_filter(self):
+    dec = decorators.Log1pFilter(
+        min_chunksize=self._data.shape)
+    vc = dec.decorate(self._data)
+    np.testing.assert_equal(vc[...].read().result(), np.log1p(self._data[...]))
 
   def test_median_filter(self):
     filter_args = {'size': [3] * self._data.ndim}
@@ -234,6 +250,15 @@ class DecoratorsTest(absltest.TestCase):
         vc[...].read().result(),
         scipy.ndimage.percentile_filter(self._data[...], **filter_args))
 
+  def test_scale_filter(self):
+    filter_args = {'factor': 0.5}
+    dec = decorators.ScaleFilter(
+        min_chunksize=self._data.shape, **filter_args)
+    vc = dec.decorate(self._data)
+    np.testing.assert_equal(
+        vc[...].read().result(),
+        filter_args['factor'] * self._data[...].read().result())
+
   def test_threshold_filter(self):
     filter_args = {'threshold': 0.25}
     dec = decorators.ThresholdFilter(
@@ -243,16 +268,6 @@ class DecoratorsTest(absltest.TestCase):
     np.testing.assert_equal(
         res, decorators._threshold(np.array(self._data), **filter_args))
 
-  def test_clip_filter(self):
-    filter_args = {'a_min': 0.5, 'a_max': None}
-    dec = decorators.ClipFilter(
-        min_chunksize=self._data.shape, **filter_args)
-    vc = dec.decorate(self._data)
-    res = vc[...].read().result()
-    np.testing.assert_equal(
-        res, np.clip(np.array(self._data), **filter_args))
-    self.assertTrue(np.any(np.not_equal(res, self._data)))
-
   def test_standardize_filter(self):
     filter_args = {'mean': 5, 'std': 3}
     dec = decorators.StandardizeFilter(
@@ -261,6 +276,15 @@ class DecoratorsTest(absltest.TestCase):
     res = vc[...].read().result()
     res_true = (np.array(self._data) - 5) / 3
     np.testing.assert_equal(res_true, res)
+
+  def test_zscore_filter(self):
+    filter_args = {'axis': None}
+    dec = decorators.ZScoreFilter(
+        min_chunksize=self._data.shape, **filter_args)
+    vc = dec.decorate(self._data)
+    np.testing.assert_equal(
+        vc[...].read().result(),
+        scipy.stats.zscore(self._data[...], **filter_args))
 
   def test_max_projection(self):
     for projection_dim in (0, 1):
