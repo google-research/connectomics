@@ -52,6 +52,6 @@ def from_set(kdts: dict[int, spatial._ckdtree.cKDTree]) -> nx.Graph:
       continue
 
     uf.union(id1, id2)
-    g.add_edge(id1, id2, idx1=idx1, idx2=idx2)
+    g.add_edge(id1, id2, idx={id1: idx1, id2: idx2})
 
   return g

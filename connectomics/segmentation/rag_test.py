@@ -65,11 +65,11 @@ class RagTest(absltest.TestCase):
 
     # Verify which specific points got connected (marked with * and %
     # in the comments above).
-    self.assertEqual(g.edges[1, 2]['idx1'], 3)
-    self.assertEqual(g.edges[1, 2]['idx2'], 0)
+    self.assertEqual(g.edges[1, 2]['idx'][1], 3)
+    self.assertEqual(g.edges[1, 2]['idx'][2], 0)
 
-    self.assertEqual(g.edges[2, 3]['idx1'], 3)
-    self.assertEqual(g.edges[2, 3]['idx2'], 2)
+    self.assertEqual(g.edges[2, 3]['idx'][2], 3)
+    self.assertEqual(g.edges[2, 3]['idx'][3], 2)
 
 
 if __name__ == '__main__':
