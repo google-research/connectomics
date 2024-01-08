@@ -272,3 +272,6 @@ class Subvolume:
         new_subvol = new_subvol.clip_abs(self.bbox)
       new_subvols.append(new_subvol)
     return new_subvols
+
+
+SubvolumeOrMany = Subvolume | list[Subvolume]
