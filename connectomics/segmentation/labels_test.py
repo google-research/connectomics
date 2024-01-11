@@ -19,6 +19,21 @@ from connectomics.segmentation import labels
 import numpy as np
 
 
+class SplitDisconnectedComponentsTest(absltest.TestCase):
+
+  def test_disconnected_components(self):
+    old_labels = np.array([[[2, 2, 3, 4],
+                            [2, 3, 3, 2],
+                            [0, 0, 0, 2],
+                            [0, 3, 3, 3]]], dtype=np.uint64)
+    new_labels = labels.split_disconnected_components(old_labels)
+    expected = np.array([[[1, 1, 2, 3],
+                          [1, 2, 2, 4],
+                          [0, 0, 0, 4],
+                          [0, 5, 5, 5]]], dtype=np.uint64)
+    self.assertTrue(labels.are_equivalent(new_labels, expected))
+
+
 class UtilsTest(absltest.TestCase):
 
   def test_equivalence(self):

@@ -19,6 +19,7 @@ from typing import Iterable, Optional, Sequence
 
 import edt
 import numpy as np
+import skimage.measure
 import skimage.morphology
 import skimage.segmentation
 
@@ -202,3 +203,33 @@ def watershed_expand(seg: np.ndarray,
 
   orig_ids, low_ids = zip(*orig_to_low)
   return relabel(ws, np.array(low_ids), np.array(orig_ids)), dist_map
+
+
+def split_disconnected_components(labels: np.ndarray, connectivity=1):
+  """Relabels the connected components of a 3-D integer array.
+
+  Connected components are determined based on 6-connectivity, where two
+  neighboring positions are considering part of the same component if they have
+  identical labels.
+
+  The label 0 is treated specially: all positions labeled 0 in the input are
+  labeled 0 in the output, regardless of whether they are contiguous.
+
+  Connected components of the input array (other than segment id 0) are given
+  consecutive ids in the output, starting from 1.
+
+  Args:
+    labels: 3-D integer numpy array.
+    connectivity: 1, 2, or 3; for 6-, 18-, or 26-connectivity respectively.
+
+  Returns:
+    The relabeled numpy array, same dtype as `labels`.
+  """
+  has_zero = 0 in labels
+  fixed_labels = skimage.measure.label(
+      labels, connectivity=connectivity, background=0)
+  if has_zero or (not has_zero and 0 in fixed_labels):
+    if np.any((fixed_labels == 0) != (labels == 0)):
+      fixed_labels[...] += 1
+      fixed_labels[labels == 0] = 0
+  return np.cast[labels.dtype](fixed_labels)
