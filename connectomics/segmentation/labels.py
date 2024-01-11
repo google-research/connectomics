@@ -15,9 +15,10 @@
 """Routines for manipulating numpy arrays of segmentation data."""
 
 import collections
-from typing import Iterable, Optional, Sequence
+from typing import AbstractSet, Iterable, Optional, Sequence
 
 import edt
+import networkx as nx
 import numpy as np
 import skimage.measure
 import skimage.morphology
@@ -233,3 +234,98 @@ def split_disconnected_components(labels: np.ndarray, connectivity=1):
       fixed_labels[...] += 1
       fixed_labels[labels == 0] = 0
   return np.cast[labels.dtype](fixed_labels)
+
+
+def get_border_ids(vol3d: np.ndarray, inplane: bool = False) -> set[int]:
+  """Finds ids of objects adjacent to the border of a 3d subvolume."""
+  ret = (set(np.unique(vol3d[:, 0, :]))  #
+         | set(np.unique(vol3d[:, -1, :]))  #
+         | set(np.unique(vol3d[:, :, 0]))  #
+         | set(np.unique(vol3d[:, :, -1])))
+  if not inplane:
+    ret |= set(np.unique(vol3d[0, :, :])) | set(np.unique(vol3d[-1, :, :]))
+  return ret
+
+
+def merge_internal_objects(bcc: list[AbstractSet[int]], aps: AbstractSet[int],
+                           todo_bcc_idx: Iterable[int]) -> dict[int, int]:
+  """Merges objects that are completely internal to other objects.
+
+  Takes as input biconnected components (BCCs) and articulation points (APs)
+  of a region adjacency graph (RAG) representing a segmentation.
+
+  Args:
+    bcc: list of sets of nodes of BCCs of the RAG
+    aps: set of APs of the RAG
+    todo_bcc_idx: indices in `bcc` for components that should be considered for
+      merging
+
+  Returns:
+    map from BCC index to new label for the BCC
+  """
+  ap_to_bcc_idx = {}  # AP -> indices of BCCs they are a part of
+  for ap in aps:
+    ap_to_bcc_idx[ap] = {i for i, cc in enumerate(bcc) if ap in cc}
+
+  ap_merge_forest = nx.DiGraph()
+  to_merge = []
+
+  while True:
+    start_len = len(to_merge)
+    remaining_bccs = []
+    for cc_i in todo_bcc_idx:
+      cc = bcc[cc_i]
+      cc_aps = set(cc & aps)
+
+      if len(cc_aps) == 1:
+        # Direct merge of the BCC into the only AP that is part of it.
+        to_merge.append(cc_i)
+        cc_ap = cc_aps.pop()
+        ap_to_bcc_idx[cc_ap].remove(cc_i)
+      elif len([cc_ap for cc_ap in cc_aps if len(ap_to_bcc_idx[cc_ap]) > 1
+               ]) == 1:
+        # Merge into an AP that is the only remaining AP that is part of
+        # more than the current BCC.
+        to_merge.append(cc_i)
+        target = None
+        for cc_ap in cc_aps:
+          if len(ap_to_bcc_idx[cc_ap]) > 1:
+            target = cc_ap
+          ap_to_bcc_idx[cc_ap].remove(cc_i)
+
+        assert target is not None
+        for cc_ap in cc_aps:
+          if cc_ap == target:
+            continue
+          ap_merge_forest.add_edge(target, cc_ap)
+      else:
+        # The current BCC cannot be merged in this iteration because it
+        # still contains multiple APs that are part of more than 1 BCC.
+        remaining_bccs.append(cc_i)
+
+    todo_bcc_idx = remaining_bccs
+
+    # Terminate if no merges were applied in the last iteration.
+    if len(to_merge) == start_len:
+      break
+
+  # Build the AP relabel map by exploring the AP merge forest starting
+  # from the target labels (roots).
+  ap_relabel = {}
+  roots = [n for n, deg in ap_merge_forest.in_degree if deg == 0]
+  for root in roots:
+    for n in nx.dfs_preorder_nodes(ap_merge_forest, source=root):
+      ap_relabel[n] = root
+
+  bcc_relabel = {}
+  for bcc_i in to_merge:
+    cc = bcc[bcc_i]
+    adjacent_aps = cc & aps
+
+    targets = set([ap_relabel.get(ap, ap) for ap in adjacent_aps])
+    assert len(targets) == 1
+    target = targets.pop()
+
+    bcc_relabel[bcc_i] = target
+
+  return bcc_relabel

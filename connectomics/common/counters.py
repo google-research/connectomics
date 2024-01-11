@@ -14,7 +14,9 @@
 # limitations under the License.
 """Provides counters for monitoring processing."""
 
+import contextlib
 import threading
+import time
 from typing import Iterable
 
 
@@ -62,6 +64,13 @@ class ThreadsafeCounterStore:
         counter = ThreadsafeCounter()
         self._counters[name] = counter
       return counter
+
+  @contextlib.contextmanager
+  def timer_counter(self, name: str):
+    """Counts execution time in ms."""
+    start = time.time()
+    yield
+    self.get_counter(name + '-ms').inc(int((time.time() - start) * 1e3))
 
   def get_nonzero(self) -> Iterable[tuple[str, ThreadsafeCounter]]:
     """Yields name, counter tuples for any counters with value > 0."""

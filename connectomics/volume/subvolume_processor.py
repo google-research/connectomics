@@ -22,6 +22,7 @@ from typing import Any, List, Tuple, Optional, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.common import counters
 from connectomics.common import file
 from connectomics.volume import descriptor
 from connectomics.volume import subvolume
@@ -35,6 +36,10 @@ SuggestedXyz = collections.namedtuple('SuggestedXyz', 'x y z')
 TupleOrSuggestedXyz = Union['XyzTuple', SuggestedXyz]  # pylint: disable=invalid-name
 XyzTuple = array.Tuple3i
 SubvolumeOrMany = Union[Subvolume, List[Subvolume]]
+
+COUNTER_STORE = counters.ThreadsafeCounterStore()
+counter = COUNTER_STORE.get_counter
+timer_counter = COUNTER_STORE.timer_counter
 
 
 @dataclasses.dataclass

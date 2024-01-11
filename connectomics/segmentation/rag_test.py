@@ -17,6 +17,7 @@
 from absl.testing import absltest
 from connectomics.segmentation import rag
 import networkx as nx
+import numpy as np
 from scipy import spatial
 
 
@@ -70,6 +71,19 @@ class RagTest(absltest.TestCase):
 
     self.assertEqual(g.edges[2, 3]['idx'][2], 3)
     self.assertEqual(g.edges[2, 3]['idx'][3], 2)
+
+  def test_from_subvolume(self):
+    seg = np.zeros((10, 10, 2), dtype=np.uint64)
+    seg[2:, :, 0] = 1
+    seg[1:, 3:4, 1] = 3
+    seg[1:, 5:6, 1] = 2
+    seg[2:, 7:, 1] = 3
+
+    result = rag.from_subvolume(seg)
+    expected = nx.Graph()
+    expected.add_edges_from([(0, 1), (1, 2), (1, 3), (2, 3), (0, 3)])
+
+    self.assertTrue(nx.is_isomorphic(result, expected))
 
 
 if __name__ == '__main__':

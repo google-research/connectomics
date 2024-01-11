@@ -19,6 +19,43 @@ import numpy as np
 from scipy import spatial
 
 
+def from_subvolume(vol3d: np.ndarray) -> nx.Graph:
+  """Returns the RAG for a 3d subvolume.
+
+  Uses 6-connectvity to find neighbors. Only works for segmentations
+  with IDs that fit in a uint32.
+
+  Args:
+    vol3d: 3d ndarray with the segmentation
+
+  Returns:
+    the corresponding RAG
+  """
+  assert np.max(vol3d) < 2**32
+
+  # Looks for neighboring segments assuming 6-connectivity.
+  seg_nbor_pairs = set()
+  for dim in 0, 1, 2:
+    sel_offset = [slice(None)] * 3
+    sel_offset[dim] = np.s_[:-1]
+
+    sel_base = [slice(None)] * 3
+    sel_base[dim] = np.s_[1:]
+
+    a = vol3d[tuple(sel_offset)].ravel()
+    b = vol3d[tuple(sel_base)].ravel()
+    x = a | (b << 32)
+    x = x[a != b]
+    unique_joint_labels = np.unique(x)
+
+    seg_nbor_pairs |= set(
+        zip(unique_joint_labels & 0xFFFFFFFF, unique_joint_labels >> 32))
+
+  g = nx.Graph()
+  g.add_edges_from(seg_nbor_pairs)
+  return g
+
+
 def from_set(kdts: dict[int, spatial._ckdtree.cKDTree]) -> nx.Graph:
   """Builds a RAG for a set of segments relying on their spatial proximity.
 
