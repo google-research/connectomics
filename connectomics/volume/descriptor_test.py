@@ -110,7 +110,7 @@ class DescriptorTest(absltest.TestCase):
 
     expected_desc = descriptor.VolumeDescriptor(
         decorator_specs=[], tensorstore_config=expected_desc)
-    original_desc = dataclasses.replace(
+    original_desc = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
         expected_desc, tensorstore_config=tmp_config_file)
 
     desc = descriptor.VolumeDescriptor.from_json(original_desc.to_json())
