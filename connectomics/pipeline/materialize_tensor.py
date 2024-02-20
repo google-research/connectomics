@@ -77,6 +77,9 @@ _GIN_CONFIG = flags.DEFINE_multi_string(
     'List of paths to the config files.')
 _GIN_BINDINGS = flags.DEFINE_multi_string(
     'gin_bindings', [], 'Newline separated list of Gin parameter bindings.')
+_GIN_SEARCH_PATHS = flags.DEFINE_multi_string(
+    'gin_search_paths', [],
+    'List of paths to add to Gin\'s search path.')
 _DRYRUN = flags.DEFINE_bool(
     'dryrun', False,
     'Just print the input, decorated, and output tensorstore schemas and exit '
@@ -208,6 +211,8 @@ def multirun(steps: Optional[Any] = None):
 def main(argv: Sequence[str]) -> None:
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
+  for path in _GIN_SEARCH_PATHS.value:
+    gin.add_config_file_search_path(path)
   gin.parse_config_files_and_bindings(_GIN_CONFIG.value, _GIN_BINDINGS.value)
   multirun()
 
