@@ -229,7 +229,8 @@ class BoundingBoxBase(Generic[T]):
     """
     if array.is_arraylike(scale_factor):
       if len(scale_factor) != self.rank:
-        raise ValueError('scale_factor length must match rank')
+        raise ValueError(f'scale_factor {scale_factor} length does not match '
+                         f'rank {self.rank}.')
       scale_factor = np.array(scale_factor, dtype=float)
     start = np.array(self._start, dtype=float) * scale_factor
     size = np.array(self._size, dtype=float) * scale_factor
@@ -257,14 +258,15 @@ class BoundingBoxBase(Generic[T]):
       start = self.start
     else:
       if array.is_arraylike(start) and len(start) != self.rank:
-        raise ValueError('start length must match rank')
+        raise ValueError(f'start {start} length does not match rank '
+                         f'{self.rank}.')
       start = self.start + start
 
     if end is None:
       end = self.end
     else:
       if array.is_arraylike(end) and len(end) != self.rank:
-        raise ValueError('end length must match rank')
+        raise ValueError(f'end {end} length does not match rank {self.rank}.')
       end = self.end + end
     return self.__class__(start=start, end=end)
 
@@ -278,7 +280,8 @@ class BoundingBoxBase(Generic[T]):
       A new bounding box shifted by the specified vector.
     """
     if array.is_arraylike(offset) and len(offset) != self.rank:
-      raise ValueError('offset length must match rank')
+      raise ValueError(f'offset {offset} length does not match rank '
+                       f'{self.rank}.')
     start = self.start + offset
     return self.__class__(start=start, size=self.size)
 
@@ -295,7 +298,8 @@ class BoundingBoxBase(Generic[T]):
       ValueError: if invalid arguments are specified.
     """
     if self.rank != other.rank:
-      raise ValueError('ranks must match')
+      raise ValueError(f'self.rank {self.rank} does not match other.rank '
+                       f'{other.rank}.')
     start = np.maximum(self.start, other.start)
     end = np.minimum(self.end, other.end)
     if np.any(end <= start):
@@ -315,7 +319,8 @@ class BoundingBoxBase(Generic[T]):
       ValueError: if invalid arguments are specified.
     """
     if self.rank != other.rank:
-      raise ValueError('ranks must match')
+      raise ValueError(f'self.rank {self.rank} does not match other.rank '
+                       f'{other.rank}.')
     start = np.minimum(self.start, other.start)
     end = np.maximum(self.end, other.end)
     return self.__class__(start=start, end=end)
