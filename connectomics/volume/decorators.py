@@ -86,7 +86,9 @@ def _merge_specs(base: MutableJsonSpec, overrides: JsonSpec,
 
 def adjust_schema_for_chunksize(schema: ts.Schema,
                                 other_chunksize: Sequence[int]) -> ts.Schema:
-  chunksize = np.lcm(schema.chunk_layout.read_chunk.shape, other_chunksize)
+  chunksize = np.lcm(
+      [s if s else 1 for s in schema.chunk_layout.read_chunk.shape],
+      [s if s else 1 for s in other_chunksize])
   chunksize = np.minimum(chunksize, schema.shape)
   json = schema.to_json()
   json['chunk_layout']['read_chunk']['shape'] = chunksize
