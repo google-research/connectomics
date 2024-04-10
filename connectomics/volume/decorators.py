@@ -903,6 +903,19 @@ class MeanProjection(Projection):
 
 
 @gin.register
+class StdProjection(Projection):
+  """Reduces input TensorStore along given dimension via nanstd()."""
+
+  def __init__(self,
+               projection_dim: int,
+               context_spec: Optional[MutableJsonSpec] = None):
+    super().__init__(
+        projection_fn=np.nanstd,
+        projection_dim=projection_dim,
+        context_spec=context_spec)
+
+
+@gin.register
 class SumProjection(Projection):
   """Reduces input TensorStore along given dimension via nansum()."""
 
