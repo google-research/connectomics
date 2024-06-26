@@ -340,19 +340,20 @@ class DecoratorsTest(absltest.TestCase):
     }).result()
     data_ts[...] = data
 
-    for use_jax in (True, False):
+    expected_res = np.array([
+        [[0., 0.],
+         [0., 0.]],
+        [[10.//2, 20.//2],
+         [30.//2, 40.//2]],
+        [[10., 20.],
+         [30., 40.]],])
+    backends = ('scipy_map_coordinates', 'jax_map_coordinates', 'jax_resize')
+    for backend in backends:
+      kwargs = {'method': 'linear'} if backend == 'jax_resize' else {'order': 1}
       dec = decorators.Interpolation(
-          size=(3, 2, 2), order=1, use_jax=use_jax,
+          size=(3, 2, 2), backend=backend, **kwargs
       )
       vc = dec.decorate(data_ts)
-
-      expected_res = np.array([
-          [[0., 0.],
-           [0., 0.]],
-          [[10.//2, 20.//2],
-           [30.//2, 40.//2]],
-          [[10., 20.],
-           [30., 40.]],])
       np.testing.assert_equal(vc[...].read().result(), expected_res)
 
   def test_multiply(self):
