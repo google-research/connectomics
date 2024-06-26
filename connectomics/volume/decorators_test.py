@@ -277,6 +277,15 @@ class DecoratorsTest(absltest.TestCase):
     res_true = (np.array(self._data) - 5) / 3
     np.testing.assert_equal(res_true, res)
 
+  def test_lowpass_filter(self):
+    filter_args = {'cutoff_freq': 0.1, 'axis': -1}
+    dec = decorators.LowpassFilter(
+        min_chunksize=self._data.shape, **filter_args)
+    vc = dec.decorate(self._data)
+    res = vc[...].read().result()
+    res_true = decorators._lowpass_filter(np.array(self._data), **filter_args)
+    np.testing.assert_equal(res_true, res)
+
   def test_zscore_filter(self):
     filter_args = {'axis': None}
     dec = decorators.ZScoreFilter(

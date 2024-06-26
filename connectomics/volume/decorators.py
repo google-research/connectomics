@@ -31,6 +31,7 @@ import gin
 import jax
 import numpy as np
 import scipy.ndimage
+import scipy.signal
 import scipy.stats
 import skimage.feature
 import tensorstore as ts
@@ -743,6 +744,39 @@ class ZScoreFilter(Filter):
                **filter_args):
     super().__init__(
         filter_fun=scipy.stats.zscore,
+        context_spec=context_spec,
+        min_chunksize=min_chunksize,
+        **filter_args)
+
+
+def _lowpass_filter(
+    data: np.ndarray,
+    cutoff_freq: float,
+    axis: int,
+    sampling_freq: float = 1,
+    order: int = 5,
+):
+  """Applies digital butterworth lowpass filter to data."""
+  sos = scipy.signal.butter(
+      order,
+      cutoff_freq,
+      analog=False,
+      btype='low',
+      output='sos',
+      fs=sampling_freq)
+  return scipy.signal.sosfiltfilt(sos, data, axis=axis, padlen=0)
+
+
+@gin.register
+class LowpassFilter(Filter):
+  """Applies butterworth lowpass filter."""
+
+  def __init__(self,
+               min_chunksize: Optional[Sequence[int]] = None,
+               context_spec: Optional[MutableJsonSpec] = None,
+               **filter_args):
+    super().__init__(
+        filter_fun=_lowpass_filter,
         context_spec=context_spec,
         min_chunksize=min_chunksize,
         **filter_args)
