@@ -209,6 +209,7 @@ def build_mask(
 
         if chan_config.fov is not None:
           fov = chan_config.fov
+          assert fov is not None
           with _MASK_SEM:
             bool_mask = ndimage.maximum_filter(
                 bool_mask,
