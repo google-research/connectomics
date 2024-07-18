@@ -18,7 +18,8 @@ import collections
 import dataclasses
 import enum
 import importlib
-from typing import Any, List, Tuple, Optional, Union
+import inspect
+from typing import Any, List, Optional, Tuple, Type, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
@@ -40,6 +41,13 @@ SubvolumeOrMany = Union[Subvolume, List[Subvolume]]
 COUNTER_STORE = counters.ThreadsafeCounterStore()
 counter = COUNTER_STORE.get_counter
 timer_counter = COUNTER_STORE.timer_counter
+
+
+def dataclass_configuration(cls: ...) -> Optional[Type]:  # pylint:disable=g-bare-generic
+  init_params = inspect.signature(cls.__init__).parameters
+  if 'config' in init_params:
+    # TODO(timblakely): Also check to see if the class is an actual dataclass.
+    return init_params['config'].annotation
 
 
 @dataclasses.dataclass
