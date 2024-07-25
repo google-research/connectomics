@@ -44,7 +44,7 @@ def is_intlike(v) -> bool:
 
 
 def is_floatlike(v) -> bool:
-  return isinstance(v, (np.float_, np.float16, np.float32, np.float64, float))
+  return isinstance(v, (np.float16, np.float32, np.float64, float))
 
 
 def is_boollike(v) -> bool:

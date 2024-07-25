@@ -233,7 +233,7 @@ def split_disconnected_components(labels: np.ndarray, connectivity=1):
     if np.any((fixed_labels == 0) != (labels == 0)):
       fixed_labels[...] += 1
       fixed_labels[labels == 0] = 0
-  return np.cast[labels.dtype](fixed_labels)
+  return np.asarray(fixed_labels, dtype=labels.dtype)
 
 
 def get_border_ids(vol3d: np.ndarray, inplane: bool = False) -> set[int]:

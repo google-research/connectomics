@@ -28,10 +28,10 @@ class NumpyEncoder(json.JSONEncoder):
 
       return int(o)
 
-    elif isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+    elif isinstance(o, (np.float16, np.float32, np.float64)):
       return float(o)
 
-    elif isinstance(o, (np.complex_, np.complex64, np.complex128)):
+    elif isinstance(o, (np.complex64, np.complex128)):
       return {"real": o.real, "imag": o.imag}
 
     elif isinstance(o, np.ndarray):
