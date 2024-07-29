@@ -95,13 +95,13 @@ class BoundingBoxBase(Generic[T]):
                        f'Got {start=} and {end=}.')
 
     if array.is_arraylike(start):
-      start = np.array(start)
+      start = np.asarray(start)
     if array.is_arraylike(end):
-      end = np.array(end)
+      end = np.asarray(end)
 
     if size is not None:
       if array.is_arraylike(size):
-        size = np.array(size)
+        size = np.asarray(size)
       else:
         param = start if start is not None else end
         size = np.ones_like(param) * size
@@ -185,32 +185,39 @@ class BoundingBoxBase(Generic[T]):
     """
     return np.asarray(seq)
 
-  def _as_immutablearray(self: S, seq: Sequence[float]) -> array.ImmutableArray:
-    return array.ImmutableArray(self._as_ndarray(seq))
-
   @property
   def rank(self: S) -> int:
     return len(self.start)
 
   @property
-  def start(self: S) -> array.ImmutableArray:
-    return self._as_immutablearray(self._start)
+  def start(self: S) -> np.ndarray:
+    start = np.asarray(self._start)
+    start.setflags(write=False)
+    return start
 
   @property
-  def end(self: S) -> array.ImmutableArray:
-    return self._as_immutablearray(self.start + self.size)
+  def end(self: S) -> np.ndarray:
+    end = self.start + self.size
+    end.setflags(write=False)
+    return end
 
   @property
-  def size(self: S) -> array.ImmutableArray:
-    return self._as_immutablearray(self._size)
+  def size(self: S) -> np.ndarray:
+    size = np.asarray(self._size)
+    size.setflags(write=False)
+    return size
 
   @property
-  def is_border_start(self: S) -> array.ImmutableArray:
-    return array.ImmutableArray(np.asarray(self._is_border_start))
+  def is_border_start(self: S) -> np.ndarray:
+    is_start = np.asarray(self._is_border_start)
+    is_start.setflags(write=False)
+    return is_start
 
   @property
-  def is_border_end(self: S) -> array.ImmutableArray:
-    return array.ImmutableArray(np.asarray(self._is_border_end))
+  def is_border_end(self: S) -> np.ndarray:
+    is_end = np.asarray(self._is_border_end)
+    is_end.setflags(write=False)
+    return is_end
 
   def scale(self: S, scale_factor: FloatSequence) -> S:
     """Returns a new BoundingBox, scaled relative to this one.

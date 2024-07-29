@@ -146,12 +146,12 @@ class Subvolume:
     return self._data.shape
 
   @property
-  def start(self) -> array.ImmutableArray:
+  def start(self) -> np.ndarray:
     """Starting corner of the bounding box."""
     return self._bbox.start
 
   @property
-  def size(self) -> array.ImmutableArray:
+  def size(self) -> np.ndarray:
     """3d size of the subvolume."""
     return self._bbox.size
 
