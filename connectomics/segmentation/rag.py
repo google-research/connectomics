@@ -33,8 +33,7 @@ def from_subvolume(vol3d: np.ndarray) -> nx.Graph:
   """
   assert np.max(vol3d) < 2**32
 
-  # Looks for neighboring segments assuming 6-connectivity.
-  seg_nbor_pairs = set()
+  g = nx.Graph()
   for dim in 0, 1, 2:
     sel_offset = [slice(None)] * 3
     sel_offset[dim] = np.s_[:-1]
@@ -48,11 +47,10 @@ def from_subvolume(vol3d: np.ndarray) -> nx.Graph:
     x = x[a != b]
     unique_joint_labels = np.unique(x)
 
-    seg_nbor_pairs |= set(
+    seg_nbor_pairs = set(
         zip(unique_joint_labels & 0xFFFFFFFF, unique_joint_labels >> 32))
+    g.add_edges_from(seg_nbor_pairs, dim=dim)
 
-  g = nx.Graph()
-  g.add_edges_from(seg_nbor_pairs)
   return g
 
 
