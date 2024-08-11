@@ -14,8 +14,11 @@
 # limitations under the License.
 """Various utility functions."""
 
+import contextlib
 import itertools
+import time
 
+from absl import logging
 import dataclasses_json
 import numpy as np
 
@@ -79,3 +82,13 @@ class NPDataClassJsonMixin(dataclasses_json.DataClassJsonMixin):
 
   def to_json(self, *args, **kw) -> str:
     return super().to_json(*args, default=_handle_np, **kw)
+
+
+@contextlib.contextmanager
+def report_time(name):
+  start = time.time()
+  try:
+    yield
+  finally:
+    duration = time.time() - start
+    logging.info('time[%s] = %.6f', name, duration)
