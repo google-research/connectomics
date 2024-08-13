@@ -30,8 +30,6 @@ from connectomics.volume import subvolume
 import dataclasses_json
 import numpy as np
 
-ImmutableArray = array.ImmutableArray
-MutableArray = array.MutableArray
 Subvolume = subvolume.Subvolume
 SuggestedXyz = collections.namedtuple('SuggestedXyz', 'x y z')
 TupleOrSuggestedXyz = Union['XyzTuple', SuggestedXyz]  # pylint: disable=invalid-name
@@ -122,10 +120,9 @@ class SubvolumeProcessor:
   # Effective subvolume/overlap configuration as set by the framework within
   # which this processor is being executed. This might include, e.g. user
   # overrides supplied via command-line arguments.
-  _context: tuple[ImmutableArray, ImmutableArray]
-  _subvol_size: ImmutableArray
-  _overlap: ImmutableArray
-
+  _context: tuple[np.ndarray, np.ndarray]
+  _subvol_size: np.ndarray
+  _overlap: np.ndarray
   # Whether the output of this processor will be cropped for subvolumes that
   # are adjacent to the input bounding box(es).
   crop_at_borders = True
@@ -158,8 +155,8 @@ class SubvolumeProcessor:
     """
     return type(self).__name__,
 
-  def pixelsize(self, input_psize: array.ArrayLike3d) -> ImmutableArray:
-    return ImmutableArray(input_psize)
+  def pixelsize(self, input_psize: array.ArrayLike3d) -> np.ndarray:
+    return np.asarray(input_psize)
 
   def num_channels(self, input_channels: int) -> int:
     return input_channels
@@ -206,10 +203,10 @@ class SubvolumeProcessor:
   def set_effective_subvol_and_overlap(self, subvol_size: array.ArrayLike3d,
                                        overlap: array.ArrayLike3d):
     """Assign the effective subvolume and overlap."""
-    self._subvol_size = array.ImmutableArray(subvol_size)
-    self._overlap = array.ImmutableArray(overlap)
+    self._subvol_size = np.asarray(subvol_size)
+    self._overlap = np.asarray(overlap)
     if np.all(self.overlap() == self._overlap):
-      self._context = tuple([array.ImmutableArray(c) for c in self.context()])
+      self._context = tuple([np.asarray(c) for c in self.context()])
     else:
       pre = self._overlap // 2
       post = self._overlap - pre

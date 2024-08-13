@@ -23,7 +23,6 @@ import itertools
 import json
 from typing import List, Optional, Sequence, Tuple, Iterable, TypeVar, Union
 
-from connectomics.common import array
 from connectomics.common import bounding_box
 import dataclasses_json
 import numpy as np
@@ -42,11 +41,11 @@ class BoxGeneratorBase:
     raise NotImplementedError()
 
   @property
-  def box_size(self) -> array.ImmutableArray:
+  def box_size(self) -> np.ndarray:
     raise NotImplementedError()
 
   @property
-  def box_overlap(self) -> array.ImmutableArray:
+  def box_overlap(self) -> np.ndarray:
     raise NotImplementedError()
 
   def generate(self, index: int) -> IndexedBoundingBox:
@@ -197,16 +196,16 @@ class BoxGenerator(BoxGeneratorBase):
     return self._output
 
   @property
-  def box_overlap(self) -> array.ImmutableArray:
-    return array.ImmutableArray(self._box_overlap)
+  def box_overlap(self) -> np.ndarray:
+    return np.asarray(self._box_overlap)
 
   @property
-  def box_size(self) -> array.ImmutableArray:
-    return array.ImmutableArray(self._box_size)
+  def box_size(self) -> np.ndarray:
+    return np.asarray(self._box_size)
 
   @property
-  def box_stride(self) -> array.ImmutableArray:
-    return array.ImmutableArray(self._box_stride)
+  def box_stride(self) -> np.ndarray:
+    return np.asarray(self._box_stride)
 
   @property
   def num_boxes(self) -> int:
@@ -217,7 +216,6 @@ class BoxGenerator(BoxGeneratorBase):
     return self._squeeze
 
   @property
-  # def start(self) -> array.ImmutableArray:
   def start(self) -> np.ndarray:
     return self._generate(0)[1].start
 
@@ -231,7 +229,6 @@ class BoxGenerator(BoxGeneratorBase):
       yield self.generate(i)[1]
 
   @property
-  # def boxes_per_dim(self) -> array.ImmutableArray:
   def boxes_per_dim(self) -> np.ndarray:
     return self._output.size
 
@@ -565,11 +562,11 @@ class MultiBoxGenerator(BoxGeneratorBase):
     return self.generators[generator_index].tag_border_locations(index)
 
   @property
-  def box_size(self) -> array.ImmutableArray:
+  def box_size(self) -> np.ndarray:
     return self.generators[0].box_size
 
   @property
-  def box_overlap(self) -> array.ImmutableArray:
+  def box_overlap(self) -> np.ndarray:
     return self.generators[0].box_overlap
 
 
