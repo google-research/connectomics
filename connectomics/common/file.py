@@ -18,10 +18,116 @@ from __future__ import annotations
 
 import functools
 import json
+import pathlib
 import typing
-from typing import Any, Callable, Dict, TypeVar, Union
+from typing import Any, Callable, Optional, Type, TypeVar, Union
 
+from absl import logging
 import dataclasses_json
+import tensorstore as ts
+
+
+T = TypeVar('T', bound=dataclasses_json.DataClassJsonMixin)
+PathLike = Union[str, pathlib.Path]
+
+
+def save_dataclass_json(
+    dataclass_instance: T,
+    path: PathLike,
+    json_path: Optional[str] = None,
+    kvdriver: str = 'file',
+):
+  """Save a dataclass to a file.
+
+  Args:
+    dataclass_instance: Dataclass to save.
+    path: Path to save to.
+    json_path: Optional path to save to within the file.
+    kvdriver: Driver to use for saving.
+  """
+  spec = {
+      'driver': 'json',
+      'kvstore': {'driver': kvdriver, 'path': str(path)},
+  }
+  if json_path is not None:
+    if not json_path.startswith('/'):
+      json_path = f'/{json_path}'
+    spec['json_pointer'] = json_path
+  meta_ts = ts.open(spec).result()
+  meta_ts.write(dataclass_instance.to_dict()).result()
+
+
+def dataclass_from_serialized(
+    target: Type[T],
+    serialized: Union[str, PathLike],
+    kvdriver: str = 'file',
+    infer_missing_fields: bool = False,
+) -> T:
+  """Load a dataclass from a serialized instance, file path, or dict.
+
+  Args:
+    target: Dataclass to load
+    serialized: Serialized instance, file path, or dict to create dataclass
+      from.
+    kvdriver: Driver to use for loading.
+    infer_missing_fields: Whether to infer missing fields.
+
+  Returns:
+    New dataclass instance.
+  """
+  as_str = str(serialized)
+  # Try to load the dataclass directly
+  if not as_str.startswith('@'):
+    try:
+      return target.from_json(serialized)
+    except json.JSONDecodeError:
+      logging.warning(
+          'Could not decode %s as JSON %s, trying to load as a path',
+          serialized,
+          target,
+      )
+  if as_str.startswith('@'):
+    as_str = as_str[1:]
+  return load_dataclass_json(
+      target,
+      as_str,
+      kvdriver=kvdriver,
+      infer_missing_fields=infer_missing_fields,
+  )
+
+
+def load_dataclass_json(
+    dataclass_type: Type[T],
+    path: PathLike,
+    json_path: Optional[str] = None,
+    kvdriver: str = 'file',
+    infer_missing_fields: bool = False,
+) -> T:
+  """Load a dataclass from a file path.
+
+  Args:
+    dataclass_type: Dataclass to load
+    path: Path to load from.
+    json_path: Optional path to load from within the file.
+    kvdriver: Driver to use for loading.
+    infer_missing_fields: Whether to infer missing fields.
+
+  Returns:
+    New dataclass instance.
+  """
+  spec = {
+      'driver': 'json',
+      'kvstore': {'driver': kvdriver, 'path': str(path)},
+  }
+  if json_path is not None:
+    if not json_path.startswith('/'):
+      json_path = f'/{json_path}'
+    spec['json_pointer'] = json_path
+  return dataclass_type.from_dict(
+      ts.open(spec).result().read().result().item(),
+      infer_missing=infer_missing_fields,
+  )
+
 
 # TODO(timblakely): Remove dependency on TF when there's a common API to read
 # files internally and externally.
@@ -45,11 +151,11 @@ GFile = tf.io.gfile.GFile
 
 NotFoundError = tf.errors.NotFoundError
 
-T = TypeVar('T', bound=dataclasses_json.DataClassJsonMixin)
 
-
-def load_dataclass(constructor: type[T], v: Union[str, dict[str, Any], T,
-                                                  None]) -> Union[T, None]:
+# TODO(timblakely): Remove in favor the above serialization.
+def load_dataclass(
+    constructor: type[T], v: Union[str, dict[str, Any], T, None]
+) -> Union[T, None]:
   """Load a dataclass from a serialized instance, file path, or dict.
 
   Args:
@@ -72,11 +178,11 @@ def load_dataclass(constructor: type[T], v: Union[str, dict[str, Any], T,
       with Open(v) as f:
         return constructor.from_json(f.read())
   else:
-    return constructor.from_dict(typing.cast(Dict[str, Any], v))
+    return constructor.from_dict(typing.cast(dict[str, Any], v))
 
 
 def dataclass_loader(
-    constructor: type[T]
+    constructor: type[T],
 ) -> Callable[[Union[str, dict[str, Any], T, None]], Union[T, None]]:
   """Create a dataclass instance from a serialized instance, file path, or dict.
 

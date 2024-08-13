@@ -14,20 +14,60 @@
 # limitations under the License.
 """Tests for file."""
 
+import dataclasses
 import os
+from typing import Optional
 
 from absl import flags
 from absl.testing import absltest
 from connectomics.common import bounding_box
 from connectomics.common import file
 from connectomics.volume import tensorstore as tsv
+import dataclasses_json
 
 FLAGS = flags.FLAGS
 
 BBox = bounding_box.BoundingBox
 
 
+@dataclasses.dataclass(frozen=True)
+class TestDataClass(dataclasses_json.DataClassJsonMixin):
+  a: int
+  b: str
+  c: float
+
+
+@dataclasses.dataclass(frozen=True)
+class AnotherTestDataClass(dataclasses_json.DataClassJsonMixin):
+  a: int
+  b: str
+  c: float
+  inner: Optional[TestDataClass] = None
+
+
 class FileTest(absltest.TestCase):
+
+  def test_load_dataclass_json(self):
+    a = TestDataClass(a=1, b='foo', c=1.0)
+    fname = os.path.join(FLAGS.test_tmpdir, 'dc_file')
+    file.save_dataclass_json(a, fname)
+    b = file.load_dataclass_json(TestDataClass, fname)
+    self.assertEqual(a, b)
+
+    a = AnotherTestDataClass(a=1, b='foo', c=1.0, inner=a)
+    file.save_dataclass_json(a, fname)
+
+    inner = file.load_dataclass_json(TestDataClass, fname, '/inner')
+    self.assertEqual(inner, a.inner)
+
+  def test_dataclass_from_serialized(self):
+    a = TestDataClass(a=1, b='foo', c=1.0)
+    fname = os.path.join(FLAGS.test_tmpdir, 'dc_file')
+    file.save_dataclass_json(a, fname)
+    b = file.dataclass_from_serialized(TestDataClass, fname)
+    self.assertEqual(a, b)
+    c = file.dataclass_from_serialized(TestDataClass, a.to_json())
+    self.assertEqual(a, c)
 
   def test_dataclass_from_instance(self):
     ts_conf = tsv.TensorstoreConfig.from_dict({
@@ -40,14 +80,15 @@ class FileTest(absltest.TestCase):
                 'start': [1, 2, 3],
                 'size': [4, 5, 6],
             }],
-        }
+        },
     })
     new_conf = file.load_dataclass(tsv.TensorstoreConfig, ts_conf)
     self.assertIs(new_conf, ts_conf)
 
   def test_dataclass_from_dict(self):
     ts_conf = file.load_dataclass(
-        tsv.TensorstoreConfig, {
+        tsv.TensorstoreConfig,
+        {
             'spec': {
                 'test': 'foo',
             },
@@ -57,18 +98,21 @@ class FileTest(absltest.TestCase):
                     'start': [1, 2, 3],
                     'size': [4, 5, 6],
                 }],
-            }
-        })
+            },
+        },
+    )
     self.assertIsNotNone(ts_conf)
     self.assertEqual(ts_conf.spec, {'test': 'foo'})
     self.assertEqual(ts_conf.metadata.voxel_size, (1, 2, 3))
     self.assertLen(ts_conf.metadata.bounding_boxes, 1)
-    self.assertEqual(ts_conf.metadata.bounding_boxes[0],
-                     BBox([1, 2, 3], [4, 5, 6]))
+    self.assertEqual(
+        ts_conf.metadata.bounding_boxes[0], BBox([1, 2, 3], [4, 5, 6])
+    )
 
   def test_dataclass_from_json(self):
     ts_conf = file.load_dataclass(
-        tsv.TensorstoreConfig, """{
+        tsv.TensorstoreConfig,
+        """{
       "spec": {
         "test": "foo"
       },
@@ -79,13 +123,15 @@ class FileTest(absltest.TestCase):
           "size": [4,5,6]
         }]
       } 
-    }""")
+    }""",
+    )
     self.assertIsNotNone(ts_conf)
     self.assertEqual(ts_conf.spec, {'test': 'foo'})
     self.assertEqual(ts_conf.metadata.voxel_size, (1, 2, 3))
     self.assertLen(ts_conf.metadata.bounding_boxes, 1)
-    self.assertEqual(ts_conf.metadata.bounding_boxes[0],
-                     BBox([1, 2, 3], [4, 5, 6]))
+    self.assertEqual(
+        ts_conf.metadata.bounding_boxes[0], BBox([1, 2, 3], [4, 5, 6])
+    )
 
   def test_dataclass_from_file(self):
     fname = os.path.join(FLAGS.test_tmpdir, 'dc_file')
@@ -107,8 +153,9 @@ class FileTest(absltest.TestCase):
     self.assertEqual(ts_conf.spec, {'test': 'foo'})
     self.assertEqual(ts_conf.metadata.voxel_size, (1, 2, 3))
     self.assertLen(ts_conf.metadata.bounding_boxes, 1)
-    self.assertEqual(ts_conf.metadata.bounding_boxes[0],
-                     BBox([1, 2, 3], [4, 5, 6]))
+    self.assertEqual(
+        ts_conf.metadata.bounding_boxes[0], BBox([1, 2, 3], [4, 5, 6])
+    )
 
   def test_dataclass_loader(self):
     ts_conf = tsv.TensorstoreConfig.from_dict({
@@ -121,7 +168,7 @@ class FileTest(absltest.TestCase):
                 'start': [1, 2, 3],
                 'size': [4, 5, 6],
             }],
-        }
+        },
     })
 
     loader = file.dataclass_loader(tsv.TensorstoreConfig)
