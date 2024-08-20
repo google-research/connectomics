@@ -26,10 +26,14 @@ import dataclasses_json
 @dataclasses_json.dataclass_json
 @dataclasses.dataclass(frozen=True)
 class VolumeMetadata:
-  """Metadata associated with a Volume."""
-  # Volume size in voxels. XYZ order.
+  """Metadata associated with a Volume.
+
+  Attributes:
+    volume_size: Volume size in voxels. XYZ order.
+    pixel_size: Pixel size in nm. XYZ order.
+    bounding_boxes: Bounding boxes associated with the volume.
+  """
   volume_size: tuple[int, int, int]
-  # Pixel size in nm. XYZ order.
   pixel_size: tuple[float, float, float]
   bounding_boxes: list[bounding_box.BoundingBox]
   # TODO(timblakely): In the event we want to enforce the assumption that volumes
@@ -71,6 +75,12 @@ class VolumeMetadata:
 
 
 class Volume:
+  """Path to a volume with associated metadata.
+
+  Attributes:
+    path: The path to the volume.
+    meta: The volume metadata.
+  """
   path: pathlib.Path
   meta: VolumeMetadata
 
@@ -84,3 +94,18 @@ class Volume:
         self.path.parent / f'{self.path.stem}.metadata.json',
         kvdriver=kvdriver,
     )
+
+
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass(frozen=True)
+class DecoratedVolume:
+  """A volume with additional metadata.
+
+  Attributes:
+    path: The path to the volume.
+    decorator_specs: A JSON string of decorator specs.
+  """
+
+  path: pathlib.Path
+  # TODO(timblakely): This should be a list of DecoratorSpec dataclasses.
+  decorator_specs: str

@@ -20,6 +20,7 @@ from typing import Optional, Sequence, Union
 
 from connectomics.common import bounding_box
 from connectomics.volume import descriptor
+from connectomics.volume import metadata
 import dataclasses_json
 import numpy as np
 from scipy import ndimage
@@ -69,7 +70,7 @@ class MaskChannelConfig(dataclasses_json.DataClassJsonMixin):
 @dataclasses.dataclass
 class VolumeMaskOptions(dataclasses_json.DataClassJsonMixin):
   """Configuration for a volume mask."""
-  mask: descriptor.VolumeDescriptor
+  mask: metadata.DecoratedVolume
   channels: list[MaskChannelConfig] = dataclasses.field(default_factory=list)
 
 
