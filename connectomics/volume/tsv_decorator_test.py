@@ -15,15 +15,17 @@
 """Tests for tsv_decorator."""
 
 import typing
-from typing import Any, Sequence, Tuple
+from typing import Any
 
 from absl.testing import absltest
 from connectomics.common import array
 from connectomics.common import bounding_box
 from connectomics.volume import base as base_volume
 from connectomics.volume import descriptor as vd
+from connectomics.volume import metadata
 from connectomics.volume import tsv_decorator
 import numpy as np
+import numpy.typing as nptyping
 import numpy.testing as npt
 
 BBox = bounding_box.BoundingBox
@@ -33,13 +35,24 @@ _: Any = None
 
 # TODO(timblakely): Create an common in-memory volume implementation. Would be
 # useful in both tests and in temporary volume situations.
-class DummyVolume(base_volume.BaseVolume):
+class DummyVolume(base_volume.Volume):
 
-  def __init__(self, volume_size: Sequence[int], voxel_size: Sequence[int],
-               bounding_boxes: list[BBox], data: np.ndarray):
-    self._volume_size = tuple(volume_size)
-    self._voxel_size = tuple(voxel_size)
-    self._bounding_boxes = bounding_boxes
+  def __init__(
+      self,
+      volume_size: tuple[int, int, int],
+      voxel_size: tuple[int, int, int],
+      bounding_boxes: list[BBox],
+      data: np.ndarray,
+      dtype: nptyping.DTypeLike,
+  ):
+    super().__init__(
+        metadata.VolumeMetadata(
+            volume_size=volume_size,
+            pixel_size=voxel_size,
+            bounding_boxes=bounding_boxes,
+            dtype=dtype,
+        )
+    )
     self._data = data
 
   def __getitem__(self, ind):
@@ -56,39 +69,17 @@ class DummyVolume(base_volume.BaseVolume):
   def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
     return self._data[slices]
 
-  @property
-  def volume_size(self) -> array.Tuple3i:
-    return self._volume_size
 
-  @property
-  def voxel_size(self) -> array.Tuple3i:
-    return self._voxel_size
-
-  @property
-  def shape(self) -> array.Tuple4i:
-    return (1,) + tuple(self._volume_size[::-1])
-
-  @property
-  def ndim(self) -> int:
-    return len(self._data.shape)
-
-  @property
-  def dtype(self) -> np.dtype:
-    return self._data.dtype
-
-  @property
-  def bounding_boxes(self) -> list[BBox]:
-    return self._bounding_boxes
-
-
-def _make_dummy_vol() -> Tuple[DummyVolume, BBox, np.ndarray]:
+def _make_dummy_vol() -> tuple[DummyVolume, BBox, np.ndarray]:
   bbox = BBox([100, 200, 300], [20, 50, 100])
   data = np.zeros(bbox.size)
   data[0] = 1
   data = np.cumsum(
       np.cumsum(np.cumsum(data, axis=0), axis=1), axis=2, dtype=np.uint64)
   data = data[np.newaxis]
-  vol = DummyVolume([3000, 2000, 1000], (8, 8, 33), [bbox], data)
+  vol = DummyVolume(
+      (3000, 2000, 1000), (8, 8, 33), [bbox], data, dtype=np.uint64
+  )
   return vol, bbox, data
 
 
@@ -99,7 +90,7 @@ class DecoratorTest(absltest.TestCase):
     self.assertEqual((3000, 2000, 1000), vol.volume_size)
     self.assertLen(vol.bounding_boxes, 1)
     self.assertEqual([bbox], vol.bounding_boxes)
-    self.assertEqual((8, 8, 33), vol.voxel_size)
+    self.assertEqual((8, 8, 33), vol.pixel_size)
     self.assertEqual(np.uint64, vol.dtype)
     self.assertEqual(4, vol.ndim)
     self.assertEqual((1, 1000, 2000, 3000), vol.shape)
@@ -137,7 +128,7 @@ class CustomDecoratorFactory(tsv_decorator.DecoratorFactory):
   def __init__(self, *args, **kwargs):
     self.called = False
 
-  def make_decorator(self, wrapped_volume: base_volume.BaseVolume, name: str,
+  def make_decorator(self, wrapped_volume: base_volume.Volume, name: str,
                      *args: list[Any],
                      **kwargs: dict[str, Any]) -> tsv_decorator.VolumeDecorator:
     if name == 'CustomDecorator':

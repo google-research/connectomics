@@ -21,6 +21,8 @@ from typing import Sequence
 from connectomics.common import bounding_box
 from connectomics.common import file
 import dataclasses_json
+import numpy as np
+import numpy.typing as npt
 
 
 @dataclasses_json.dataclass_json
@@ -32,13 +34,20 @@ class VolumeMetadata:
     volume_size: Volume size in voxels. XYZ order.
     pixel_size: Pixel size in nm. XYZ order.
     bounding_boxes: Bounding boxes associated with the volume.
+    num_channels: Number of channels in the volume.
+    dtype: Datatype of the volume. Must be numpy compatible.
   """
   volume_size: tuple[int, int, int]
   pixel_size: tuple[float, float, float]
   bounding_boxes: list[bounding_box.BoundingBox]
-  # TODO(timblakely): In the event we want to enforce the assumption that volumes
-  # are XYZC (i.e. processing happens differently for spatial and channel axes),
-  # add num_channels to this class to record any changes in channel counts.
+  num_channels: int = 1
+  dtype: npt.DTypeLike = dataclasses.field(
+      metadata=dataclasses_json.config(
+          decoder=np.dtype,
+          encoder=lambda x: np.dtype(x).name,
+      ),
+      default=np.uint8,
+  )
 
   def scale(
       self, scale_factors: float | Sequence[float]

@@ -15,36 +15,31 @@
 """Tests for base."""
 
 from absl.testing import absltest
-from connectomics.common import array
 from connectomics.common import bounding_box
 from connectomics.volume import base
+from connectomics.volume import metadata
 import numpy as np
 import numpy.testing as npt
 
 Box = bounding_box.BoundingBox
 
 
-class ShimVolume(base.BaseVolume):
+class ShimVolume(base.Volume):
 
-  def __init__(self, *args, **kwargs):
-    super(*args, **kwargs)
+  default_metadata = metadata.VolumeMetadata(
+      volume_size=(10, 11, 12),
+      pixel_size=(1, 2, 3),
+      bounding_boxes=[Box([0, 0, 0], [10, 20, 30])],
+      num_channels=1,
+      dtype=np.float32,
+  )
+
+  def __init__(self):
+    super().__init__(self.default_metadata)
     self.called = False
-
-  @property
-  def shape(self) -> array.Tuple4i:
-    return (1, 12, 11, 10)
 
 
 class BaseVolumeTest(absltest.TestCase):
-
-  def test_not_implemented(self):
-    v = base.BaseVolume()
-
-    for field in [
-        'volume_size', 'voxel_size', 'shape', 'ndim', 'dtype', 'bounding_boxes'
-    ]:
-      with self.assertRaises(NotImplementedError):
-        _ = getattr(v, field)
 
   def test_get_points(self):
     tself = self

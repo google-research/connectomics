@@ -59,7 +59,7 @@ class TensorstoreConfig(utils.NPDataClassJsonMixin):
           decoder=file.dataclass_loader(TensorstoreMetadata)))
 
 
-class TensorstoreVolume(base.BaseVolume):
+class TensorstoreVolume(base.Volume):
   """Tensorstore-backed Volume."""
 
   _store: ts.TensorStore

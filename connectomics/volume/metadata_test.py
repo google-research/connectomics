@@ -20,6 +20,7 @@ from absl import flags
 from absl.testing import absltest
 from connectomics.common import bounding_box
 from connectomics.volume import metadata
+import numpy as np
 
 
 FLAGS = flags.FLAGS
@@ -83,6 +84,7 @@ class VolumeMetadataTest(absltest.TestCase):
         volume_size=(100, 100, 100),
         pixel_size=(8, 8, 30),
         bounding_boxes=[BBOX([10, 10, 10], [100, 100, 100])],
+        dtype=np.uint64,
     )
     temp_path = pathlib.Path(self.create_tempdir().full_path)
     vol = metadata.Volume(path=temp_path / 'foo.volinfo', meta=meta)

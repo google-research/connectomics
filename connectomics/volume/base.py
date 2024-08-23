@@ -21,6 +21,7 @@ from typing import Optional, Sequence, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.volume import metadata
 from connectomics.volume import subvolume
 import numpy as np
 
@@ -34,10 +35,10 @@ def slice_to_bbox(ind: array.CanonicalSlice) -> bounding_box.BoundingBox:
 
 class VolumeIndexer:
   """Interface for indexing supporting point lookups and slices."""
-  _volume: 'BaseVolume'
+  _volume: 'Volume'
   slices: array.CanonicalSlice
 
-  def __init__(self, volume: 'BaseVolume'):
+  def __init__(self, volume: 'Volume'):
     self._volume = volume
 
   def __getitem__(
@@ -64,8 +65,13 @@ class DirectVolumeIndexer(VolumeIndexer):
 
 # TODO(timblakely): Make generic-typed so it exposes both VolumeInfo and
 # Tensorstore via .descriptor.
-class BaseVolume:
+class Volume:
   """Common interface to multiple volume backends for Decorators."""
+
+  meta: metadata.VolumeMetadata
+
+  def __init__(self, meta: metadata.VolumeMetadata):
+    self.meta = meta
 
   def __getitem__(
       self, ind: array.IndexExpOrPointLookups) -> Union[np.ndarray, Subvolume]:
@@ -110,32 +116,33 @@ class BaseVolume:
   @property
   def volume_size(self) -> array.Tuple3i:
     """Volume size in voxels, XYZ."""
-    raise NotImplementedError
+    return self.meta.volume_size
 
   @property
-  def voxel_size(self) -> array.Tuple3f:
+  def pixel_size(self) -> array.Tuple3f:
     """Size of an individual voxels in physical dimensions (Nanometers)."""
-    raise NotImplementedError
+    return self.meta.pixel_size
 
   @property
   def shape(self) -> array.Tuple4i:
     """Shape of the volume in voxels, CZYX."""
-    raise NotImplementedError
+    return (self.meta.num_channels,) + self.volume_size[::-1]
 
   @property
   def ndim(self) -> int:
     """Number of dimensions in this volume."""
-    raise NotImplementedError
+    # TODO(timblakely): Support 3D volumes?
+    return 4
 
   @property
   def dtype(self) -> np.dtype:
     """Datatype of the underlying data."""
-    raise NotImplementedError
+    return self.meta.dtype
 
   @property
   def bounding_boxes(self) -> list[bounding_box.BoundingBox]:
     """List of bounding boxes contained in this volume."""
-    raise NotImplementedError
+    return self.meta.bounding_boxes
 
   @property
   def chunk_size(self) -> array.Tuple4i:
@@ -156,7 +163,7 @@ class BaseVolume:
 
 
 def get_bounding_boxes_or_full(
-    volume: BaseVolume,
+    volume: Volume,
     bounding_boxes: Optional[Sequence[bounding_box.BoundingBoxBase]] = None,
     clip: bool = False,
 ) -> list[bounding_box.BoundingBox]:

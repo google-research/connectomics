@@ -60,7 +60,7 @@ def load_descriptor(spec: Union[str, VolumeDescriptor]) -> VolumeDescriptor:
 
 def open_descriptor(
     spec: Union[str, VolumeDescriptor],
-    context: Optional[dict[str, Any]] = None) -> base.BaseVolume:
+    context: Optional[dict[str, Any]] = None) -> base.Volume:
   """Open a volume from a volume descriptor.
 
   Args:

@@ -34,7 +34,7 @@ DecoratorSpec = Dict[str, Any]
 class DecoratorFactory:
   """Constructs a VolumeDecorator based on a name and arguments."""
 
-  def make_decorator(self, wrapped_volume: base.BaseVolume, name: str,
+  def make_decorator(self, wrapped_volume: base.Volume, name: str,
                      *args: list[Any],
                      **kwargs: dict[str, Any]) -> 'VolumeDecorator':
     raise NotImplementedError()
@@ -43,14 +43,14 @@ class DecoratorFactory:
 class GlobalsDecoratorFactory:
   """Loads VolumeDecorators from globals()."""
 
-  def make_decorator(self, wrapped_volume: base.BaseVolume, name: str,
+  def make_decorator(self, wrapped_volume: base.Volume, name: str,
                      *args: list[Any],
                      **kwargs: dict[str, Any]) -> 'VolumeDecorator':
     decorator_ctor = globals()[name]
     return decorator_ctor(wrapped_volume, *args, **kwargs)
 
 
-def from_specs(volume: base.BaseVolume,
+def from_specs(volume: base.Volume,
                specs: list[DecoratorSpec],
                decorator_factory: Optional[DecoratorFactory] = None):
   """Decorates the given volume from the given specs.
@@ -85,12 +85,12 @@ def from_specs(volume: base.BaseVolume,
   return volume
 
 
-class VolumeDecorator(base.BaseVolume):
+class VolumeDecorator(base.Volume):
   """Delegates to wrapped volumes, optionally applying transforms."""
 
-  wrapped: base.BaseVolume
+  wrapped: base.Volume
 
-  def __init__(self, wrapped: base.BaseVolume):
+  def __init__(self, wrapped: base.Volume):
     self._wrapped = wrapped
 
   def get_points(self, points: array.PointLookups) -> np.ndarray:
@@ -105,7 +105,7 @@ class VolumeDecorator(base.BaseVolume):
 
   @property
   def voxel_size(self) -> array.Tuple3f:
-    return self._wrapped.voxel_size
+    return self._wrapped.pixel_size
 
   @property
   def shape(self) -> array.Tuple4i:
@@ -133,7 +133,7 @@ class Upsample(VolumeDecorator):
 
   scale_zyx: np.ndarray
 
-  def __init__(self, wrapped: base.BaseVolume, scale: array.ArrayLike3d):
+  def __init__(self, wrapped: base.Volume, scale: array.ArrayLike3d):
     """Initializes the wrapper.
 
     Args:
@@ -154,7 +154,7 @@ class Upsample(VolumeDecorator):
 
   @property
   def voxel_size(self) -> array.Tuple3i:
-    return tuple(self._wrapped.voxel_size / self.scale_zyx[::-1])
+    return tuple(self._wrapped.pixel_size / self.scale_zyx[::-1])
 
   @property
   def shape(self) -> array.Tuple4i:
