@@ -29,14 +29,21 @@ def import_symbol(
   Args:
     specifier: full path specifier in format
       [<packages>.]<module_name>.<model_class>, if packages is missing
-      ``default_packages`` is used.
+      ``default_packages`` is used. Alternatively, the specifier can be just a
+      class name within a module specified by default_packages.
     default_packages: chain of packages before module in format
       <top_pack>.<sub_pack>.<subsub_pack> etc.
 
   Returns:
     symbol: object from module
   """
-  module_path, symbol_name = specifier.rsplit('.', 1)
+
+  try:
+    module_path, symbol_name = specifier.rsplit('.', 1)
+  except ValueError as _:
+    module_path = default_packages
+    symbol_name = specifier
+
   try:
     logging.info(
         'Importing symbol %s from %s.%s',

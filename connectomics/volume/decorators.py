@@ -20,13 +20,16 @@ Example usage:
 """
 
 import copy
+import dataclasses
 import enum
 import pprint
 from typing import Any, Iterable, Mapping, MutableMapping, Optional, Sequence, Union
 
 from absl import logging
 from connectomics.common import counters
+from connectomics.common import import_util
 from connectomics.common import metadata_utils
+import dataclasses_json
 import gin
 import jax
 import numpy as np
@@ -1477,3 +1480,41 @@ class MultiscaleWrite(Writer):
         'multiscale_spec:\n' +
         pprint.pformat(self.multiscale_spec)
     )
+
+
+@dataclasses_json.dataclass_json(undefined=dataclasses_json.Undefined.INCLUDE)
+@dataclasses.dataclass(frozen=True)
+class DecoratorArgs:
+  """Empty dataclass to allow automatic parsing of decorator args.
+
+  This precludes the need to define a dataclass for each decorator. All
+  undefined fields are included in the resulting python object.
+  """
+
+  values: dataclasses_json.CatchAll
+
+
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass(frozen=True)
+class DecoratorSpec:
+  """Decorator specification.
+
+  Attributes:
+    name: Name of the decorator.
+    args: Arguments for decorator's constructor.
+    package: Package where the decorator is defined.
+  """
+
+  name: str
+  args: DecoratorArgs | None = None
+  package: str | None = None
+
+
+def build_decorator(spec: DecoratorSpec) -> Decorator:
+  """Builds a Decorator from a DecoratorSpec."""
+  package = spec.package
+  if package is None:
+    package = 'connectomics.volume.decorators'
+  decorator_cls = import_util.import_symbol(spec.name, package)
+  args = spec.args.values if spec.args else {}
+  return decorator_cls(**args)

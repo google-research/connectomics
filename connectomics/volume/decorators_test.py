@@ -15,6 +15,7 @@
 """Tests for decorators."""
 
 import copy
+import json
 
 from absl.testing import absltest
 from connectomics.volume import decorators
@@ -721,6 +722,106 @@ class MergeSpecsTest(absltest.TestCase):
         'shuffle': 2,
         'type': 'blosc'
     })
+
+
+class TestDecorator(decorators.Decorator):
+
+  def __init__(self, foo: int, bar: str):
+    self.foo = foo
+    self.bar = bar
+
+
+class DecoratorSpecTest(absltest.TestCase):
+
+  def test_decorator_args_unknown(self):
+    expected_args = {
+        'downsample_factors': [1, 2],
+        'method': 'max',
+    }
+    args = decorators.DecoratorArgs.from_json(json.dumps(expected_args))
+    self.assertEqual(args.values['downsample_factors'], [1, 2])
+    self.assertEqual(args.values['method'], 'max')
+    self.assertEqual(args.to_dict(), expected_args)
+
+  def test_decorator_spec(self):
+    expected_spec = {
+        'name': 'Downsample',
+    }
+    spec = decorators.DecoratorSpec.from_json(json.dumps(expected_spec))
+    self.assertEqual(spec.name, 'Downsample')
+    self.assertIsNone(spec.args)
+    self.assertIsNone(spec.package)
+
+    expected_spec = {
+        'name': 'Downsample',
+        'args': {
+            'downsample_factors': [1, 2],
+            'method': 'max',
+        },
+        'package': 'foo.bar.baz',
+    }
+    spec = decorators.DecoratorSpec.from_json(json.dumps(expected_spec))
+    args = decorators.DecoratorArgs.from_dict(expected_spec['args'])
+    self.assertEqual(args.to_dict(), expected_spec['args'])
+    self.assertEqual(spec.to_dict(), expected_spec)
+
+  def test_build_decorator(self):
+    spec = decorators.DecoratorSpec.from_json(
+        json.dumps({
+            'name': 'Downsample',
+            'args': {
+                'downsample_factors': [2, 4],
+                'method': 'max',
+            },
+        })
+    )
+    decorator = decorators.build_decorator(spec)
+    self.assertIsInstance(decorator, decorators.Downsample)
+    self.assertEqual(decorator._downsample_factors, [2, 4])
+    self.assertEqual(decorator._method, 'max')
+
+  def test_build_decorator_with_bad_args(self):
+    spec = decorators.DecoratorSpec.from_json(
+        json.dumps({
+            'name': 'Downsample',
+            'args': {
+                'downsample_factors': [2, 4],
+                'method': 'max',
+                'BAD_ARG': 'very_bad',
+            },
+        })
+    )
+    with self.assertRaises(TypeError):
+      decorators.build_decorator(spec)
+
+    spec = decorators.DecoratorSpec.from_json(
+        json.dumps({
+            'name': 'Downsample',
+            'args': {
+                'downsample_factors': [2, 4],
+                # missing method
+            },
+        })
+    )
+    with self.assertRaises(TypeError):
+      decorators.build_decorator(spec)
+
+  def test_build_decorator_with_package(self):
+    spec = decorators.DecoratorSpec.from_json(
+        json.dumps({
+            'name': 'TestDecorator',
+            'args': {
+                'foo': 1,
+                'bar': 'baz',
+            },
+            'package': 'connectomics.volume.decorators_test',
+        })
+    )
+    decorator = decorators.build_decorator(spec)
+    # Can't use assertIsInstance because the package is imported.
+    self.assertEqual(decorator.__class__.__name__, TestDecorator.__name__)
+    self.assertEqual(decorator.foo, 1)
+    self.assertEqual(decorator.bar, 'baz')
 
 
 if __name__ == '__main__':

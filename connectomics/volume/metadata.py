@@ -20,6 +20,7 @@ from typing import Sequence
 
 from connectomics.common import bounding_box
 from connectomics.common import file
+from connectomics.volume import decorators
 import dataclasses_json
 import numpy as np
 import numpy.typing as npt
@@ -112,9 +113,11 @@ class DecoratedVolume:
 
   Attributes:
     path: The path to the volume.
-    decorator_specs: A JSON string of decorator specs.
+    decorator_specs: A JSON string of decorator specs, or one or more
+      DecoratorSpec objects.
   """
 
   path: pathlib.Path
-  # TODO(timblakely): This should be a list of DecoratorSpec dataclasses.
-  decorator_specs: str
+  decorator_specs: (
+      str | decorators.DecoratorSpec | list[decorators.DecoratorSpec]
+  )
