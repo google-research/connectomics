@@ -39,7 +39,12 @@ class MaskTest(absltest.TestCase):
 
     box = bounding_box.BoundingBox(start=(0, 0, 0), size=subvol_size[::-1])
 
-    mask = m.build_mask([mask_config], box, image=image)
+    mask = m.build_mask(
+        [mask_config],
+        box,
+        decorated_volume_loader=lambda x: x,
+        image=image,
+    )
 
     np.testing.assert_array_equal(mask, image >= 0.5)
 
@@ -47,10 +52,17 @@ class MaskTest(absltest.TestCase):
     image = np.random.randint(0, 10, subvol_size, dtype=np.uint8)
     chan_config.values = [1, 5, 8]
 
-    mask = m.build_mask([mask_config], box, image=image)
+    self.called = False
+    mask = m.build_mask(
+        [mask_config],
+        box,
+        decorated_volume_loader=lambda x: x,
+        image=image,
+    )
 
-    np.testing.assert_array_equal(mask,
-                                  (image == 1) | (image == 5) | (image == 8))
+    np.testing.assert_array_equal(
+        mask, (image == 1) | (image == 5) | (image == 8)
+    )
 
 
 if __name__ == '__main__':
