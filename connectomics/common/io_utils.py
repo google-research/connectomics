@@ -73,4 +73,4 @@ def load_object_list(path: str) -> set[int]:
   """Loads an object list from a text file."""
   with file.Open(path) as f:
     df = pd.read_csv(f, engine="c", comment="#", header=None, dtype=np.uint64)
-    return set(int(x) for x in df.to_numpy(dtype=np.uint64))
+    return set(int(x) for x in df.to_numpy(dtype=np.uint64).ravel())
