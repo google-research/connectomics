@@ -122,7 +122,7 @@ class MaskConfigs(dataclasses_json.DataClassJsonMixin):
 # TODO(timblakely): Return a Subvolume.
 def build_mask(
     masks: Sequence[MaskConfig] | MaskConfigs,
-    box: bounding_box.BoundingBoxBase,
+    box: bounding_box.BoundingBox,
     decorated_volume_loader: Callable[[metadata.DecoratedVolume], np.ndarray],
     mask_volume_map: dict[str, Any] | None = None,
     image: np.ndarray | None = None,
@@ -187,7 +187,7 @@ def build_mask(
               decorated_volume_loader(config.volume.mask)
           )
         volume = mask_volume_map[volume_key]
-        mask = volume[box.to_slice()]
+        mask = volume[box.to_slice4d()]
       else:
         logging.fatal('Unsupported mask source: %s', config.to_json())
 
