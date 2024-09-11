@@ -16,6 +16,7 @@
 
 import contextlib
 import itertools
+import re
 import time
 
 from absl import logging
@@ -92,3 +93,18 @@ def report_time(name):
   finally:
     duration = time.time() - start
     logging.info('time[%s] = %.6f', name, duration)
+
+
+_PASCAL_TO_KEBAB_RE = re.compile(
+    r"""
+    (?<=[a-z])(?=[A-Z])
+    |
+    (?<=[A-Z])(?=[A-Z][a-z])
+    """,
+    re.X,
+)
+
+
+def pascal_to_kebab(name: str) -> str:
+  """Converts a PascalCase name to kebab-case."""
+  return _PASCAL_TO_KEBAB_RE.sub('-', name).lower()

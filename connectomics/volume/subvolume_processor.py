@@ -25,6 +25,7 @@ from connectomics.common import array
 from connectomics.common import bounding_box
 from connectomics.common import counters
 from connectomics.common import file
+from connectomics.common import utils
 from connectomics.volume import descriptor
 from connectomics.volume import subvolume
 import dataclasses_json
@@ -130,6 +131,12 @@ class SubvolumeProcessor:
   # If true, the actual content of input_ndarray doesn't matter. The processor
   # only uses the type and geometry of the array for further processing.
   ignores_input_data = False
+
+  # Namespace to use for counters. Overridable by subclasses; defaults to
+  # kebab-case of the class name.
+  @property
+  def namespace(self) -> str:
+    return utils.pascal_to_kebab(type(self).__name__)
 
   def output_type(self, input_type: Union[np.uint8, np.uint64, np.float32]):
     """Returns Numpy output type of self.process for given input_type.

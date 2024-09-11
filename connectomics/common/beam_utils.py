@@ -31,6 +31,11 @@ def timer_counter(namespace, name):
       int((time.time() - start) * 1e3))
 
 
+def counter(namespace, name):
+  """Returns a counter."""
+  return beam.metrics.Metrics.counter(namespace, name)
+
+
 class MustFollow(beam.PTransform):
   """Pass-through input, but enforces deferred processing."""
 
