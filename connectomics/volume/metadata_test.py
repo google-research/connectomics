@@ -37,6 +37,9 @@ class VolumeMetadataTest(absltest.TestCase):
         bounding_boxes=[BBOX([10, 10, 10], [100, 100, 100])],
     )
 
+    self.assertIsInstance(meta.volume_size, metadata.XYZ)
+    self.assertIsInstance(meta.pixel_size, metadata.XYZ)
+
     # No scale
     scaled = meta.scale([1, 1, 1])
     self.assertCountEqual(scaled.volume_size, [100, 100, 100])

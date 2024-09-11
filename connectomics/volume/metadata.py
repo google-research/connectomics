@@ -20,15 +20,19 @@ from typing import Sequence
 
 from connectomics.common import bounding_box
 from connectomics.common import file
+from connectomics.common import tuples
 from connectomics.volume import decorators
 import dataclasses_json
 import numpy as np
 import numpy.typing as npt
 
 
+XYZ = tuples.XYZ
+
+
 @dataclasses_json.dataclass_json
 @dataclasses.dataclass(frozen=True)
-class VolumeMetadata:
+class VolumeMetadata(tuples.DataclassWithNamedTuples):
   """Metadata associated with a Volume.
 
   Attributes:
@@ -38,9 +42,12 @@ class VolumeMetadata:
     num_channels: Number of channels in the volume.
     dtype: Datatype of the volume. Must be numpy compatible.
   """
-  volume_size: tuple[int, int, int]
-  pixel_size: tuple[float, float, float]
-  bounding_boxes: list[bounding_box.BoundingBox]
+
+  volume_size: XYZ[int] = tuples.named_tuple_field(XYZ)
+  pixel_size: XYZ[float] = tuples.named_tuple_field(XYZ)
+  bounding_boxes: list[bounding_box.BoundingBox] = dataclasses.field(
+      default_factory=list
+  )
   num_channels: int = 1
   dtype: npt.DTypeLike = dataclasses.field(
       metadata=dataclasses_json.config(
@@ -50,17 +57,16 @@ class VolumeMetadata:
       default=np.uint8,
   )
 
-  def scale(
-      self, scale_factors: float | Sequence[float]
-  ) -> 'VolumeMetadata':
+  def scale(self, scale_factors: float | Sequence[float]) -> 'VolumeMetadata':
     """Scales the volume metadata by the given scale factors.
-    
+
     `scale_factors` must be a single float that will be applied multiplicatively
     to the volume size and pixel size, or a 3-element sequence of floats that
     will be applied to XYZ dimensions respectively.
-    
+
     Args:
       scale_factors: The scale factors to apply.
+
     Returns:
       A new VolumeMetadata with the scaled values.
     """
@@ -91,6 +97,7 @@ class Volume:
     path: The path to the volume.
     meta: The volume metadata.
   """
+
   path: pathlib.Path
   meta: VolumeMetadata
 
