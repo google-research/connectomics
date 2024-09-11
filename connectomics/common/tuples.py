@@ -34,9 +34,10 @@ class XYZ(Generic[T], NamedTuple):
   z: T
 
   def __eq__(self, other):
-    if not (isinstance(other, XYZ) or isinstance(other, ZYX)):
-      return False
-    return self.x == other.x and self.y == other.y and self.z == other.z
+    if isinstance(other, XYZ) or isinstance(other, ZYX):
+      return self.x == other.x and self.y == other.y and self.z == other.z
+    # Defer to tuple equality.
+    return self[:] == other
 
   @property
   def xyz(self) -> 'XYZ[T]':
@@ -69,9 +70,10 @@ class ZYX(Generic[T], NamedTuple):
     return self
 
   def __eq__(self, other):
-    if not (isinstance(other, XYZ) or isinstance(other, ZYX)):
-      return False
-    return self.x == other.x and self.y == other.y and self.z == other.z
+    if isinstance(other, XYZ) or isinstance(other, ZYX):
+      return self.x == other.x and self.y == other.y and self.z == other.z
+    # Defer to tuple equality.
+    return self[:] == other
 
 
 class XYZC(Generic[T], NamedTuple):
@@ -83,14 +85,15 @@ class XYZC(Generic[T], NamedTuple):
   c: T
 
   def __eq__(self, other):
-    if not (isinstance(other, XYZC) or isinstance(other, CZYX)):
-      return False
-    return (
-        self.x == other.x
-        and self.y == other.y
-        and self.z == other.z
-        and self.c == other.c
-    )
+    if isinstance(other, XYZC) or isinstance(other, CZYX):
+      return (
+          self.x == other.x
+          and self.y == other.y
+          and self.z == other.z
+          and self.c == other.c
+      )
+    # Defer to tuple equality.
+    return self[:] == other
 
   @property
   def xyz(self) -> 'XYZ[T]':
@@ -135,14 +138,15 @@ class CZYX(Generic[T], NamedTuple):
     return self
 
   def __eq__(self, other):
-    if not (isinstance(other, XYZC) or isinstance(other, CZYX)):
-      return False
-    return (
-        self.x == other.x
-        and self.y == other.y
-        and self.z == other.z
-        and self.c == other.c
-    )
+    if isinstance(other, XYZC) or isinstance(other, CZYX):
+      return (
+          self.x == other.x
+          and self.y == other.y
+          and self.z == other.z
+          and self.c == other.c
+      )
+    # Defer to tuple equality.
+    return self[:] == other
 
 
 def named_tuple_field(

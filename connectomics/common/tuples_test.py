@@ -49,6 +49,9 @@ class NamedTupleTest(absltest.TestCase):
     self.assertEqual(zyx[1], y)
     self.assertEqual(zyx[2], x)
 
+    self.assertEqual(xyz, (x, y, z))
+    self.assertEqual(zyx, (z, y, x))
+
   def test_xyzc_czyx(self):
     x, y, z, c = [1, 2, 3, 4]
     xyz = tuples.XYZ(x, y, z)
@@ -85,6 +88,9 @@ class NamedTupleTest(absltest.TestCase):
     self.assertEqual(czyx[1], z)
     self.assertEqual(czyx[2], y)
     self.assertEqual(czyx[3], x)
+
+    self.assertEqual(xyzc, (x, y, z, c))
+    self.assertEqual(czyx, (c, z, y, x))
 
 
 if __name__ == '__main__':
