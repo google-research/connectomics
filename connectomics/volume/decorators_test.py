@@ -357,6 +357,31 @@ class DecoratorsTest(absltest.TestCase):
       vc = dec.decorate(data_ts)
       np.testing.assert_equal(vc[...].read().result(), expected_res)
 
+  def test_padding_interpolation(self):
+    data = np.array([
+        [1, 2],
+        [3, 4]
+    ]).astype(np.float32)
+    data_ts = ts.open({
+        'driver': 'n5',
+        'kvstore': {'driver': 'memory'},
+        'metadata': {
+            'dataType': 'float32',
+            'dimensions': (2, 2),
+            'axes': ('x', 'y'),
+        },
+        'create': True,
+        'delete_existing': True,
+    }).result()
+    data_ts[...] = data
+
+    expected_res = np.zeros((4, 4)).astype(np.float32)
+    expected_res[1:3, 1:3] = data
+    dec = decorators.Interpolation(size=(4, 4), backend='pad',
+                                   constant_values=0)
+    vc = dec.decorate(data_ts)
+    np.testing.assert_equal(vc[...].read().result(), expected_res)
+
   def test_multiply(self):
     mask = np.zeros_like(self._data, dtype='float32')
 

@@ -807,7 +807,8 @@ class Interpolation(Decorator):
     """
     super().__init__(context_spec)
     self._size = size
-    backends = ('scipy_map_coordinates', 'jax_map_coordinates', 'jax_resize')
+    backends = (
+        'scipy_map_coordinates', 'jax_map_coordinates', 'jax_resize', 'pad')
     if backend not in backends:
       raise ValueError(f'Unsupported backend: {backend} not in {backends}.')
     self._backend = backend
@@ -820,6 +821,9 @@ class Interpolation(Decorator):
       raise ValueError(
           f'Length of `size` ({len(self._size)}) does not match ' +
           f'dimensionality of input TensorStore ({input_ts.ndim}).')
+    if (any(new < old for new, old in zip(self._size, input_ts.shape))
+        and self._backend == 'pad'):
+      raise ValueError('Can only pad to increase size.')
     inclusive_min = input_ts.schema.domain.inclusive_min
     if inclusive_min != tuple([0 for _ in range(input_ts.ndim)]):
       raise ValueError(
@@ -854,6 +858,17 @@ class Interpolation(Decorator):
                     for d, s in enumerate(self._size)]
         array[...] = jax.image.resize(data, sub_size,
                                       **self._interpolation_args)
+      elif self._backend == 'pad':
+        pad_width = []
+        for d in range(input_ts.ndim):
+          if d not in resize_dim:
+            pad_width.append((0, 0))
+          else:
+            difference = self._size[d] - data.shape[d]
+            left = difference // 2
+            pad_width.append((left, difference - left))
+        array[...] = np.pad(data, pad_width=pad_width,
+                            **self._interpolation_args)
       else:
         array[...] = map_coordinates(data, np.mgrid[slices],
                                      **self._interpolation_args)
