@@ -30,9 +30,11 @@ import numpy.typing as npt
 XYZ = tuples.XYZ
 
 
-@dataclasses_json.dataclass_json
 @dataclasses.dataclass(frozen=True)
-class VolumeMetadata(tuples.DataclassWithNamedTuples):
+class VolumeMetadata(
+    tuples.DataclassWithNamedTuples,
+    dataclasses_json.DataClassJsonMixin,
+):
   """Metadata associated with a Volume.
 
   Attributes:
@@ -42,9 +44,9 @@ class VolumeMetadata(tuples.DataclassWithNamedTuples):
     num_channels: Number of channels in the volume.
     dtype: Datatype of the volume. Must be numpy compatible.
   """
-
-  volume_size: XYZ[int] = tuples.named_tuple_field(XYZ)
-  pixel_size: XYZ[float] = tuples.named_tuple_field(XYZ)
+  path: str
+  volume_size: XYZ[int] = tuples.named_tuple_field(XYZ[int])
+  pixel_size: XYZ[float] = tuples.named_tuple_field(XYZ[float])
   bounding_boxes: list[bounding_box.BoundingBox] = dataclasses.field(
       default_factory=list
   )
@@ -57,7 +59,11 @@ class VolumeMetadata(tuples.DataclassWithNamedTuples):
       default=np.uint8,
   )
 
-  def scale(self, scale_factors: float | Sequence[float]) -> 'VolumeMetadata':
+  def scale(
+      self,
+      scale_factors: float | Sequence[float],
+      new_path: file.PathLike | None = None,
+  ) -> 'VolumeMetadata':
     """Scales the volume metadata by the given scale factors.
 
     `scale_factors` must be a single float that will be applied multiplicatively
@@ -66,6 +72,8 @@ class VolumeMetadata(tuples.DataclassWithNamedTuples):
 
     Args:
       scale_factors: The scale factors to apply.
+      new_path: The new path to use for the volume. If None, the original path
+        will be used.
 
     Returns:
       A new VolumeMetadata with the scaled values.
@@ -74,43 +82,24 @@ class VolumeMetadata(tuples.DataclassWithNamedTuples):
       scale_factors = [scale_factors] * 3
     if len(scale_factors) != 3:
       raise ValueError('scale_factors must be a 3-element sequence.')
+    path = new_path if new_path is not None else self.path
     return VolumeMetadata(
-        volume_size=tuple(
+        path=path,
+        volume_size=tuples.XYZ(*[
             int(x * scale) for x, scale in zip(self.volume_size, scale_factors)
-        ),
-        pixel_size=tuple(
-            x / scale for x, scale in zip(self.pixel_size, scale_factors)
-        ),
+        ]),
+        pixel_size=tuples.XYZ(*[
+            float(x / scale) for x, scale in zip(self.pixel_size, scale_factors)
+        ]),
         bounding_boxes=[
             bbox.scale(scale_factors) for bbox in self.bounding_boxes
         ],
     )
 
-  def scale_xy(self, factor: float) -> 'VolumeMetadata':
-    return self.scale([factor, factor, 1.0])
-
-
-class Volume:
-  """Path to a volume with associated metadata.
-
-  Attributes:
-    path: The path to the volume.
-    meta: The volume metadata.
-  """
-
-  path: pathlib.Path
-  meta: VolumeMetadata
-
-  def __init__(self, path: file.PathLike, meta: VolumeMetadata):
-    self.path = pathlib.Path(path)
-    self.meta = meta
-
-  def save_metadata(self, kvdriver: str = 'file'):
-    file.save_dataclass_json(
-        self.meta,
-        self.path.parent / f'{self.path.stem}.metadata.json',
-        kvdriver=kvdriver,
-    )
+  def scale_xy(
+      self, factor: float, new_path: file.PathLike | None = None
+  ) -> 'VolumeMetadata':
+    return self.scale([factor, factor, 1.0], new_path)
 
 
 @dataclasses_json.dataclass_json

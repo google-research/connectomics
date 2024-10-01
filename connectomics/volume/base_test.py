@@ -16,6 +16,7 @@
 
 from absl.testing import absltest
 from connectomics.common import bounding_box
+from connectomics.common import tuples
 from connectomics.volume import base
 from connectomics.volume import metadata
 import numpy as np
@@ -27,8 +28,9 @@ Box = bounding_box.BoundingBox
 class ShimVolume(base.Volume):
 
   default_metadata = metadata.VolumeMetadata(
-      volume_size=(10, 11, 12),
-      pixel_size=(1, 2, 3),
+      path='none',
+      volume_size=tuples.XYZ(10, 11, 12),
+      pixel_size=tuples.XYZ(1, 2, 3),
       bounding_boxes=[Box([0, 0, 0], [10, 20, 30])],
       num_channels=1,
       dtype=np.float32,

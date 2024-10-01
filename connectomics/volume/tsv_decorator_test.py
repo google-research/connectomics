@@ -20,13 +20,14 @@ from typing import Any
 from absl.testing import absltest
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.common import tuples
 from connectomics.volume import base as base_volume
 from connectomics.volume import descriptor as vd
 from connectomics.volume import metadata
 from connectomics.volume import tsv_decorator
 import numpy as np
-import numpy.typing as nptyping
 import numpy.testing as npt
+import numpy.typing as nptyping
 
 BBox = bounding_box.BoundingBox
 
@@ -47,8 +48,9 @@ class DummyVolume(base_volume.Volume):
   ):
     super().__init__(
         metadata.VolumeMetadata(
-            volume_size=volume_size,
-            pixel_size=voxel_size,
+            path='none',
+            volume_size=tuples.XYZ(*volume_size),
+            pixel_size=tuples.XYZ(*voxel_size),
             bounding_boxes=bounding_boxes,
             dtype=dtype,
         )

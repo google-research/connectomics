@@ -19,6 +19,7 @@ import pathlib
 from absl import flags
 from absl.testing import absltest
 from connectomics.common import bounding_box
+from connectomics.common import tuples
 from connectomics.volume import metadata
 import numpy as np
 
@@ -32,8 +33,9 @@ class VolumeMetadataTest(absltest.TestCase):
 
   def test_volume_metadata(self):
     meta = metadata.VolumeMetadata(
-        volume_size=(100, 100, 100),
-        pixel_size=(8, 8, 30),
+        path='none',
+        volume_size=tuples.XYZ(100, 100, 100),
+        pixel_size=tuples.XYZ(8, 8, 30),
         bounding_boxes=[BBOX([10, 10, 10], [100, 100, 100])],
     )
 
@@ -81,23 +83,6 @@ class VolumeMetadataTest(absltest.TestCase):
     self.assertEqual(
         scaled.bounding_boxes, [BBOX([20, 20, 10], [200, 200, 100])]
     )
-
-  def test_volume_save_metadata(self):
-    meta = metadata.VolumeMetadata(
-        volume_size=(100, 100, 100),
-        pixel_size=(8, 8, 30),
-        bounding_boxes=[BBOX([10, 10, 10], [100, 100, 100])],
-        dtype=np.uint64,
-    )
-    temp_path = pathlib.Path(self.create_tempdir().full_path)
-    vol = metadata.Volume(path=temp_path / 'foo.volinfo', meta=meta)
-    vol.save_metadata()
-
-    target_path = temp_path / 'foo.metadata.json'
-    self.assertTrue(target_path.exists())
-    file = open(target_path, 'r')
-    self.assertEqual(metadata.VolumeMetadata.from_json(file.read()), vol.meta)
-    file.close()
 
 
 if __name__ == '__main__':
