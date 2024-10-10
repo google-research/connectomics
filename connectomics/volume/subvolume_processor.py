@@ -27,6 +27,8 @@ from connectomics.common import counters
 from connectomics.common import file
 from connectomics.common import utils
 from connectomics.volume import descriptor
+from connectomics.volume import mask
+from connectomics.volume import metadata
 from connectomics.volume import subvolume
 import dataclasses_json
 import numpy as np
@@ -281,6 +283,38 @@ class SubvolumeProcessor:
     fx, fy, fz = front
     bx, by, bz = np.array(data.shape[:0:-1]) - back
     return Subvolume(data[:, fz:bz, fy:by, fx:bx], cropped_box)
+
+  # TODO(timblakely): Correct the return value from Any.
+  def _open_volume(
+      self,
+      path_or_volume: (
+          file.PathLike | metadata.VolumeMetadata | metadata.DecoratedVolume
+      ),
+  ) -> Any:
+    raise NotImplementedError(
+        'This function needs to be defined in a subclass.'
+    )
+
+  def _get_mask_configs(
+      self, mask_configs: str | mask.MaskConfigs
+  ) -> mask.MaskConfigs:
+    raise NotImplementedError(
+        'This function needs to be defined in a subclass.'
+    )
+
+  def _get_metadata(self, path: file.PathLike) -> metadata.VolumeMetadata:
+    raise NotImplementedError(
+        'This function needs to be defined in a subclass.'
+    )
+
+  def _build_mask(
+      self,
+      mask_configs: mask.MaskConfigs,
+      box: bounding_box.BoundingBoxBase,
+  ) -> Any:
+    raise NotImplementedError(
+        'This function needs to be defined in a subclass.'
+    )
 
 
 def get_processor(config: SubvolumeProcessorConfig) -> SubvolumeProcessor:
