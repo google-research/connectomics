@@ -120,15 +120,7 @@ def restore_checkpoint(
       args=ocp.args.Composite(**restore_args_dict))
 
 
-class TfGrainCheckpointHandler(tfgrain.OrbaxCheckpointHandler):
-
-  def save(self, directory: epath.Path, args: 'TfGrainCheckpointArgs') -> None:
-    return super().save(directory, args.item)
-
-  def restore(
-      self, directory: epath.Path, args: 'TfGrainCheckpointArgs'
-  ) -> tfgrain.TfGrainDatasetIterator:
-    return super().restore(directory, args.item)
+TfGrainCheckpointHandler = tfgrain.OrbaxCheckpointHandler
 
 
 @ocp.args.register_with_handler(  # pytype:disable=wrong-arg-types
