@@ -19,6 +19,7 @@ dm_pix is limited to [batch, x, y, channel].
 """
 
 from absl.testing import absltest
+import chex
 from connectomics.jax import metrics
 import dm_pix
 import jax.numpy as jnp
@@ -178,6 +179,13 @@ class MetricsTest(absltest.TestCase):
     self.assertEqual(actual['precision__dend'], 1)
     self.assertEqual(actual['recall__dend'], 1)
     self.assertEqual(actual['f1__dend'], 1)
+
+  def test_count(self):
+    count = metrics.Count.from_fun(metrics.nonzero_weight)
+    actual = count.from_model_output(
+        weight=jnp.asarray([0.5, 0.0, 0.25]), mask=None
+    ).compute()
+    chex.assert_trees_all_close(actual, 2)
 
 
 if __name__ == '__main__':

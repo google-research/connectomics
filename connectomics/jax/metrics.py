@@ -398,6 +398,29 @@ def create_vpt_metric(metric_fn: Any, threshold: float) -> type[metrics.Metric]:
   return _ValidPredictionTime.from_fun(make_per_step_metric(metric_fn))
 
 
+def nonzero_weight(weight: jnp.ndarray, **_):
+  return (weight > 0).astype(jnp.int64)
+
+
+@flax.struct.dataclass
+class Count(metrics.Metric):
+  """Counts positive values in the input."""
+
+  count: jnp.ndarray
+
+  @classmethod
+  def from_model_output(
+      cls, inputs: jnp.ndarray, mask: jnp.ndarray | None = None, **_
+  ) -> metrics.Metric:
+    return cls(count=inputs.sum())
+
+  def merge(self, other: 'Count') -> 'Count':
+    return type(self)(count=self.count + other.count)
+
+  def compute(self) -> Any:
+    return self.count
+
+
 def create_classification_metrics(
     class_names: Sequence[str],
 ) -> type[metrics.CollectingMetric]:
