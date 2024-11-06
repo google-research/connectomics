@@ -20,7 +20,7 @@ import functools
 import json
 import pathlib
 import typing
-from typing import Any, Callable, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Type, TypeVar, Union
 
 from absl import logging
 import dataclasses_json
@@ -34,7 +34,7 @@ PathLike = Union[str, pathlib.Path]
 def save_dataclass_json(
     dataclass_instance: T,
     path: PathLike,
-    json_path: Optional[str] = None,
+    json_path: str | None = None,
     kvdriver: str = 'file',
 ):
   """Save a dataclass to a file.
@@ -96,10 +96,34 @@ def dataclass_from_serialized(
   )
 
 
+def load_json(
+    json_or_path: str | PathLike,
+    json_path: str | None = None,
+    kvdriver: str = 'file',
+) -> dict[str, Any]:
+  """Load a JSON object from a string or file path via TensorStore."""
+  try:
+    return json.loads(json_or_path)
+  except json.JSONDecodeError:
+    logging.warning(
+        'Could not decode %s as JSON, trying to load as a path', json_or_path
+    )
+  path = json_or_path
+  spec = {
+      'driver': 'json',
+      'kvstore': {'driver': kvdriver, 'path': str(path)},
+  }
+  if json_path is not None:
+    if not json_path.startswith('/'):
+      json_path = f'/{json_path}'
+    spec['json_pointer'] = json_path
+  return ts.open(spec).result().read().result().item()
+
+
 def load_dataclass_json(
     dataclass_type: Type[T],
     path: PathLike,
-    json_path: Optional[str] = None,
+    json_path: str | None = None,
     kvdriver: str = 'file',
     infer_missing_fields: bool = False,
 ) -> T:
@@ -115,16 +139,8 @@ def load_dataclass_json(
   Returns:
     New dataclass instance.
   """
-  spec = {
-      'driver': 'json',
-      'kvstore': {'driver': kvdriver, 'path': str(path)},
-  }
-  if json_path is not None:
-    if not json_path.startswith('/'):
-      json_path = f'/{json_path}'
-    spec['json_pointer'] = json_path
   return dataclass_type.from_dict(
-      ts.open(spec).result().read().result().item(),
+      load_json(path, json_path, kvdriver),
       infer_missing=infer_missing_fields,
   )
 
