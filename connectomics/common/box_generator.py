@@ -21,15 +21,15 @@ import dataclasses
 import functools
 import itertools
 import json
-from typing import List, Optional, Sequence, Tuple, Iterable, TypeVar, Union
+from typing import Iterable, Sequence, TypeVar
 
 from connectomics.common import bounding_box
 import dataclasses_json
 import numpy as np
 
 S = TypeVar('S', bound='BoxGenerator')
-BoxIndexCoordinates = Tuple[int, ...]
-IndexedBoundingBox = Tuple[BoxIndexCoordinates, bounding_box.BoundingBoxBase]
+BoxIndexCoordinates = tuple[int, ...]
+IndexedBoundingBox = tuple[BoxIndexCoordinates, bounding_box.BoundingBoxBase]
 BoxIndex = TypeVar('BoxIndex', bound=int)
 
 
@@ -38,14 +38,6 @@ class BoxGeneratorBase:
 
   @property
   def num_boxes(self) -> int:
-    raise NotImplementedError()
-
-  @property
-  def box_size(self) -> np.ndarray:
-    raise NotImplementedError()
-
-  @property
-  def box_overlap(self) -> np.ndarray:
     raise NotImplementedError()
 
   def generate(self, index: int) -> IndexedBoundingBox:
@@ -73,65 +65,61 @@ class BoxGeneratorBase:
 
 
 @dataclasses_json.dataclass_json
-@dataclasses.dataclass(eq=False)
+@dataclasses.dataclass(eq=False, frozen=True)
 class BoxGenerator(BoxGeneratorBase):
   """Generates overlapping sub-boxes spanning the input bounding box."""
 
-  _outer_box: bounding_box.BoundingBoxBase = dataclasses.field(
-      metadata=dataclasses_json.config(field_name='outer_box'))
-  _box_size: np.ndarray = dataclasses.field(
+  outer_box: bounding_box.BoundingBox
+  box_size: np.ndarray = dataclasses.field(
       metadata=dataclasses_json.config(
-          field_name='box_size',
-          encoder=lambda v: v.tolist(),
-          decoder=np.asarray))
-  _box_overlap: np.ndarray = dataclasses.field(
+          encoder=lambda v: v.tolist(), decoder=np.asarray
+      )
+  )
+  box_overlap: np.ndarray = dataclasses.field(
       metadata=dataclasses_json.config(
-          field_name='box_overlap',
           encoder=lambda v: v.tolist(),
-          decoder=np.asarray))
-  _back_shift_small_boxes: bool = dataclasses.field(
-      metadata=dataclasses_json.config(field_name='back_shift_small_boxes'))
+          decoder=np.asarray,
+      ),
+      default_factory=lambda: np.zeros([]),
+  )
+  back_shift_small_boxes: bool = dataclasses.field(
+      metadata=dataclasses_json.config(field_name='back_shift_small_boxes'),
+      default=False,
+  )
 
-  def __init__(
-      self,
-      outer_box: bounding_box.BoundingBoxBase = None,  # pytype: disable=annotation-type-mismatch
-      box_size: Union[Sequence[int], Sequence[float]] = None,  # pytype: disable=annotation-type-mismatch
-      box_overlap: Optional[Sequence[Union[int, float]]] = None,
-      back_shift_small_boxes: bool = False,
-      **kwargs):
+  squeeze: np.ndarray = dataclasses.field(
+      init=False,
+      metadata=dataclasses_json.config(
+          encoder=lambda v: v.tolist(),
+          decoder=np.asarray,
+          exclude=dataclasses_json.Exclude.ALWAYS,
+      ),
+  )
+  box_stride: np.ndarray = dataclasses.field(
+      init=False,
+      metadata=dataclasses_json.config(
+          encoder=lambda v: v.tolist(),
+          decoder=np.asarray,
+          exclude=dataclasses_json.Exclude.ALWAYS,
+      ),
+  )
+  output: bounding_box.BoundingBox = dataclasses.field(
+      init=False,
+      metadata=dataclasses_json.config(exclude=dataclasses_json.Exclude.ALWAYS),
+  )
+
+  def __post_init__(self):
     """Initialize a generator.
-
-    Args:
-      outer_box: Volume to subdivide.
-      box_size: N-D sequence giving desired 3d size of each sub-box. Smaller
-        sub-boxes may be included at the back edge of the volume, but not if
-        they are smaller than overlap (in that case they are completely included
-        in the preceding box). If an element is None, the entire range available
-        within outer_box is used for that dimension.
-      box_overlap: N-D sequence giving the overlap between neighboring
-        sub-boxes. Must be < box_size.
-      back_shift_small_boxes: If True, do not produce undersized boxes at the
-        back edge of the outer_box.  Instead, shift the start of these boxes
-        back so that they can maintain sub_box_size.  This means that the boxes
-        at the back edge will have more overlap than the rest of the boxes.
-      **kwargs: Support for dataclass
 
     Raises:
       ValueError: If box size is incompatible with outer box rank.
       ValueError: If box overlap is incompatible with outer box rank.
       ValueError: If box size is <= overlap.
     """
-
-    # Support for dataclasses
-    if outer_box is None and '_outer_box' in kwargs:
-      outer_box = kwargs['_outer_box']
-    if box_size is None and '_box_size' in kwargs:
-      box_size = kwargs['_box_size']
-    if box_overlap is None and '_box_overlap' in kwargs:
-      box_overlap = kwargs['_box_overlap']
-    if '_back_shift_small_boxes' in kwargs:
-      back_shift_small_boxes = kwargs['_back_shift_small_boxes']
-
+    outer_box = self.outer_box
+    box_size = self.box_size
+    box_overlap = np.asarray(self.box_overlap)
+    back_shift_small_boxes = self.back_shift_small_boxes
     # normalize box_size
     box_size = list(box_size)
     squeeze = []
@@ -147,7 +135,7 @@ class BoxGenerator(BoxGeneratorBase):
                        (box_size.size, outer_box.rank))
 
     # normalize overlap
-    if box_overlap is not None:
+    if box_overlap.ndim != 0:
       box_overlap = list(box_overlap)
       while len(box_overlap) < outer_box.rank:
         box_overlap.append(0)
@@ -173,14 +161,19 @@ class BoxGenerator(BoxGeneratorBase):
     # The output_shape is the number of output boxes generated.
     output_shape = -(-(outer_box.size - back_clip) // box_stride)
 
-    self._outer_box = outer_box
-    self._output = bounding_box.BoundingBox(
-        start=([0] * output_shape.size), size=output_shape)
-    self._squeeze = squeeze
-    self._box_size = box_size
-    self._box_stride = box_stride
-    self._box_overlap = box_overlap
-    self._back_shift_small_boxes = back_shift_small_boxes
+    object.__setattr__(self, 'outer_box', outer_box)
+    object.__setattr__(
+        self,
+        'output',
+        bounding_box.BoundingBox(
+            start=([0] * output_shape.size), size=output_shape
+        ),
+    )
+    object.__setattr__(self, 'squeeze', np.asarray(squeeze))
+    object.__setattr__(self, 'box_size', np.asarray(box_size))
+    object.__setattr__(self, 'box_stride', np.asarray(box_stride))
+    object.__setattr__(self, 'box_overlap', np.asarray(box_overlap))
+    object.__setattr__(self, 'back_shift_small_boxes', back_shift_small_boxes)
 
   def __str__(self) -> str:
     items = [f'num_boxes={self.num_boxes}'
@@ -188,40 +181,12 @@ class BoxGenerator(BoxGeneratorBase):
     return '%s(%s)' % (type(self).__name__, ', '.join(items))
 
   @property
-  def outer_box(self) -> bounding_box.BoundingBoxBase:
-    return self._outer_box
-
-  @property
-  def output(self) -> bounding_box.BoundingBox:
-    return self._output
-
-  @property
-  def box_overlap(self) -> np.ndarray:
-    return np.asarray(self._box_overlap)
-
-  @property
-  def box_size(self) -> np.ndarray:
-    return np.asarray(self._box_size)
-
-  @property
-  def box_stride(self) -> np.ndarray:
-    return np.asarray(self._box_stride)
-
-  @property
   def num_boxes(self) -> int:
-    return np.prod(self._output.size)
-
-  @property
-  def squeeze(self) -> List[int]:
-    return self._squeeze
+    return np.prod(self.output.size)
 
   @property
   def start(self) -> np.ndarray:
     return self._generate(0)[1].start
-
-  @property
-  def back_shift_small_boxes(self) -> bool:
-    return self._back_shift_small_boxes
 
   @property
   def boxes(self) -> Iterable[bounding_box.BoundingBoxBase]:
@@ -230,15 +195,16 @@ class BoxGenerator(BoxGeneratorBase):
 
   @property
   def boxes_per_dim(self) -> np.ndarray:
-    return self._output.size
+    return self.output.size
 
   def _generate(self, index: BoxIndex) -> IndexedBoundingBox:
-    coords = np.unravel_index(index, self._output.size, order='F')
-    start = np.maximum(self._outer_box.start,
-                       self._outer_box.start + coords * self._box_stride)
-    end = np.minimum(start + self._box_size, self._outer_box.end)
-    if self._back_shift_small_boxes:
-      start = np.maximum(self._outer_box.start, end - self._box_size)
+    coords = np.unravel_index(index, self.output.size, order='F')
+    start = np.maximum(
+        self.outer_box.start, self.outer_box.start + coords * self.box_stride
+    )
+    end = np.minimum(start + self.box_size, self.outer_box.end)
+    if self.back_shift_small_boxes:
+      start = np.maximum(self.outer_box.start, end - self.box_size)
     is_start, is_end = self.tag_border_locations(index)
     return coords, self.outer_box.__class__(
         start=start, end=end, is_border_start=is_start, is_border_end=is_end)
@@ -277,22 +243,24 @@ class BoxGenerator(BoxGeneratorBase):
     """
     box = self.generate(index)[1]
     is_start, is_end = self.tag_border_locations(index)
-    front = self._box_overlap // 2
-    back = self._box_overlap - front
+    front = self.box_overlap // 2
+    back = self.box_overlap - front
     front *= 1 - is_start
     back *= 1 - is_end
     return box.adjusted_by(start=front, end=-back)
 
   def box_coordinate_to_index(self, point: Sequence[int]) -> BoxIndex:
     point = np.array(point)
-    if np.any(point < 0) or np.any(point >= self._output.size):
+    if np.any(point < 0) or np.any(point >= self.output.size):
       raise ValueError(
           'point must be between the origin and the output_shape: %r versus %r'
-          % (point, self._output.size))
-    return np.ravel_multi_index(point, dims=self._output.size, order='F')
+          % (point, self.output.size)
+      )
+    return np.ravel_multi_index(point, dims=self.output.size, order='F')
 
-  def offset_to_index(self, index: BoxIndex,
-                      offset: Sequence[int]) -> Optional[BoxIndex]:
+  def offset_to_index(
+      self, index: BoxIndex, offset: Sequence[int]
+  ) -> BoxIndex | None:
     """Calculate the index of another box at offset relative to current index.
 
     This is usually used to calculate the boxes that neighbor the current box.
@@ -309,7 +277,7 @@ class BoxGenerator(BoxGeneratorBase):
     Raises:
       ValueError: If inputs are incorrect.
     """
-    if len(offset) != self._outer_box.rank:
+    if len(offset) != self.outer_box.rank:
       raise ValueError('Offset must have same rank')
     index_box_coord = np.array(offset) + self.generate(index)[0]
     if np.any(index_box_coord < 0) or np.any(
@@ -318,7 +286,8 @@ class BoxGenerator(BoxGeneratorBase):
     return self.box_coordinate_to_index(index_box_coord)
 
   def spatial_point_to_box_coordinates(
-      self, point: Sequence[float]) -> List[BoxIndexCoordinates]:
+      self, point: Sequence[float]
+  ) -> list[BoxIndexCoordinates]:
     """Returns all indexed subvolume corners that intersect with a given point.
 
     Given an N-D point, returns indexed subvolume grid corners for bounding
@@ -333,15 +302,16 @@ class BoxGenerator(BoxGeneratorBase):
 
     relative_point = point - self.start
     if np.any(relative_point < 0) or np.any(
-        relative_point >= self._outer_box.end):
+        relative_point >= self.outer_box.end
+    ):
       return []
 
-    begin_strides = -np.eye(self._outer_box.rank)
-    end_strides = np.eye(self._outer_box.rank)
+    begin_strides = -np.eye(self.outer_box.rank)
+    end_strides = np.eye(self.outer_box.rank)
 
-    subvolume_size = self._box_size
-    overlap = self._box_overlap
-    stride = self._box_stride
+    subvolume_size = self.box_size
+    overlap = self.box_overlap
+    stride = self.box_stride
     remainder = relative_point % subvolume_size
     lower_grid_coord = (relative_point - remainder) // stride
     all_box_grid_coords = [lower_grid_coord]
@@ -365,14 +335,11 @@ class BoxGenerator(BoxGeneratorBase):
     return [
         tuple(x)
         for x in coords
-        if np.all(x >= 0) and np.all(x < self._output.size)
+        if np.all(x >= 0) and np.all(x < self.output.size)
     ]
 
   def batch(
-      self,
-      batch_size: int,
-      begin_index: int = 0,
-      end_index: Optional[int] = None
+      self, batch_size: int, begin_index: int = 0, end_index: int | None = None
   ) -> Iterable[Iterable[bounding_box.BoundingBoxBase]]:
     """Generates iterators for batches of sub-boxes.
 
@@ -390,8 +357,9 @@ class BoxGenerator(BoxGeneratorBase):
       i_end = min(i_begin + batch_size, end_index)
       yield (self.generate(i)[1] for i in range(i_begin, i_end))
 
-  def tag_border_locations(self,
-                           index: BoxIndex) -> Tuple[np.ndarray, np.ndarray]:
+  def tag_border_locations(
+      self, index: BoxIndex
+  ) -> tuple[np.ndarray, np.ndarray]:
     """Checks whether a box touches the border of the BoundingBox.
 
     Args:
@@ -403,9 +371,9 @@ class BoxGenerator(BoxGeneratorBase):
       1st and 2nd element of the tuple) of the bbox along the given dimension.
     """
     # Can't use _generate here, or it would recurse.
-    coords_xyz = np.unravel_index(index, self._output.size, order='F')
+    coords_xyz = np.unravel_index(index, self.output.size, order='F')
     is_start = np.array(coords_xyz) == 0
-    is_end = coords_xyz == self._output.size - 1
+    is_end = coords_xyz == self.output.size - 1
     return is_start, is_end
 
   def overlapping_subboxes(
@@ -419,18 +387,22 @@ class BoxGenerator(BoxGeneratorBase):
     Yields:
       Bounding boxes that overlap.
     """
-    start_xyz = (np.maximum(0, (box.start - self.start - self._box_size)) //
-                 self._box_stride * self._box_stride)
-    end_xyz = box.end + self._box_size
+    start_xyz = (
+        np.maximum(0, (box.start - self.start - self.box_size))
+        // self.box_stride
+        * self.box_stride
+    )
+    end_xyz = box.end + self.box_size
 
-    for z in range(start_xyz[2], end_xyz[2], self._box_stride[2]):
-      for y in range(start_xyz[1], end_xyz[1], self._box_stride[1]):
-        for x in range(start_xyz[0], end_xyz[0], self._box_stride[0]):
+    for z in range(start_xyz[2], end_xyz[2], self.box_stride[2]):
+      for y in range(start_xyz[1], end_xyz[1], self.box_stride[1]):
+        for x in range(start_xyz[0], end_xyz[0], self.box_stride[0]):
           try:
-            idx = self.box_coordinate_to_index(
-                (x // self._box_stride[0],
-                 y // self._box_stride[1],
-                 z // self._box_stride[2]))
+            idx = self.box_coordinate_to_index((
+                x // self.box_stride[0],
+                y // self.box_stride[1],
+                z // self.box_stride[2],
+            ))
           except ValueError:
             continue
 
@@ -444,7 +416,7 @@ MultiBoxIndex = TypeVar('MultiBoxIndex', bound=int)
 
 
 @dataclasses_json.dataclass_json
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class MultiBoxGenerator(BoxGeneratorBase):
   """Wrapper around multiple BoxGenerators.
 
@@ -452,50 +424,65 @@ class MultiBoxGenerator(BoxGeneratorBase):
   index.
   """
 
-  _outer_boxes: list[bounding_box.BoundingBoxBase] = dataclasses.field(
-      metadata=dataclasses_json.config(field_name='outer_boxes'))
-  _box_size: np.ndarray = dataclasses.field(
+  outer_boxes: list[bounding_box.BoundingBoxBase]
+  box_size: np.ndarray = dataclasses.field(
       metadata=dataclasses_json.config(
-          field_name='box_size',
-          encoder=lambda v: v.tolist(),
-          decoder=np.asarray))
-  _box_overlap: np.ndarray = dataclasses.field(
+          encoder=lambda v: v.tolist(), decoder=np.asarray
+      )
+  )
+  box_overlap: np.ndarray = dataclasses.field(
       metadata=dataclasses_json.config(
-          field_name='box_overlap',
           encoder=lambda v: v.tolist(),
-          decoder=np.asarray))
-  _back_shift_small_boxes: bool = dataclasses.field(
-      metadata=dataclasses_json.config(field_name='back_shift_small_boxes'))
+          decoder=np.asarray,
+      ),
+      default_factory=lambda: np.zeros([]),
+  )
+  back_shift_small_boxes: bool = dataclasses.field(
+      metadata=dataclasses_json.config(field_name='back_shift_small_boxes'),
+      default=False,
+  )
 
-  def __init__(
-      self,
-      outer_boxes: Sequence[bounding_box.BoundingBoxBase] = None,  # pytype: disable=annotation-type-mismatch# Support for dataclasses
-      *args,
-      **kwargs):  # pylint: disable=keyword-arg-before-vararg
-    """Wrapper around multiple BoxGenerators.
+  generators: list[BoxGenerator] = dataclasses.field(
+      init=False,
+      metadata=dataclasses_json.config(exclude=dataclasses_json.Exclude.ALWAYS),
+  )
+  prefix_sums: np.ndarray = dataclasses.field(
+      init=False,
+      metadata=dataclasses_json.config(exclude=dataclasses_json.Exclude.ALWAYS),
+  )
 
-    Args:
-      outer_boxes: Multiple outer boxes.
-      *args: Broadcast to respective generators for input outer_boxes.
-      **kwargs: Broadcast to respective generators for input outer_boxes.
-    """
+  def __post_init__(self):
+    """Initializes multi-box generator attributes."""
+    outer_boxes = self.outer_boxes
 
-    if outer_boxes is None and '_outer_boxes' in kwargs:
-      outer_boxes = kwargs['_outer_boxes']
-
-    self.generators = [
-        BoxGenerator(outer_box, *args, **kwargs) for outer_box in outer_boxes
-    ]
+    object.__setattr__(
+        self,
+        'generators',
+        [
+            BoxGenerator(
+                outer_box,
+                self.box_size,
+                self.box_overlap,
+                self.back_shift_small_boxes,
+            )
+            for outer_box in outer_boxes
+        ],
+    )
     boxes_per_generators = [c.num_boxes for c in self.generators]
-    self.prefix_sums = np.cumsum([0] + boxes_per_generators)
+    object.__setattr__(
+        self, 'prefix_sums', np.cumsum([0] + boxes_per_generators)
+    )
     first_gen = self.generators[0]
-    self._box_size = first_gen.box_size
-    self._box_overlap = first_gen.box_overlap
-    self._back_shift_small_boxes = first_gen._back_shift_small_boxes
-    self._outer_boxes = list(outer_boxes)
+    object.__setattr__(self, 'box_size', first_gen.box_size)
+    object.__setattr__(self, 'box_overlap', first_gen.box_overlap)
+    object.__setattr__(
+        self, 'back_shift_small_boxes', first_gen.back_shift_small_boxes
+    )
+    object.__setattr__(self, 'outer_boxes', list(outer_boxes))
 
   def index_to_generator_index(
-      self, multi_box_index: MultiBoxIndex) -> Tuple[GeneratorIndex, BoxIndex]:
+      self, multi_box_index: MultiBoxIndex
+  ) -> tuple[GeneratorIndex, BoxIndex]:
     """Determines which outer box the index falls into.
 
     Args:
@@ -547,7 +534,8 @@ class MultiBoxGenerator(BoxGeneratorBase):
     return self.prefix_sums[-1]
 
   def tag_border_locations(
-      self, multi_box_index: MultiBoxIndex) -> Tuple[np.ndarray, np.ndarray]:
+      self, multi_box_index: MultiBoxIndex
+  ) -> tuple[np.ndarray, np.ndarray]:
     """Checks whether a box touches the border of the containing BoundingBox.
 
     Args:
@@ -560,14 +548,6 @@ class MultiBoxGenerator(BoxGeneratorBase):
     """
     generator_index, index = self.index_to_generator_index(multi_box_index)
     return self.generators[generator_index].tag_border_locations(index)
-
-  @property
-  def box_size(self) -> np.ndarray:
-    return self.generators[0].box_size
-
-  @property
-  def box_overlap(self) -> np.ndarray:
-    return self.generators[0].box_overlap
 
 
 def from_json(as_json: str) -> BoxGeneratorBase:

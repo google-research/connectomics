@@ -36,7 +36,7 @@ class BoxGeneratorTest(absltest.TestCase):
     self.assertEqual(Box(start=(0, 0, 0), size=(20, 20, 10)), c.outer_box)
     self.assertEqual(Box(start=(0, 0, 0), size=(2, 2, 2)), c.output)
 
-    self.assertEqual(c.squeeze, [])
+    npt.assert_array_equal(c.squeeze, [])
     self.assertEqual(c.num_boxes, 8)
 
   def test_init_float(self):
@@ -49,7 +49,7 @@ class BoxGeneratorTest(absltest.TestCase):
         FloatBox(start=(0.1, 0.1, 0.1), size=(20.1, 20.1, 10.1)), c.outer_box)
     self.assertEqual(Box(start=(0, 0, 0), size=(2, 2, 3)), c.output)
 
-    self.assertEqual(c.squeeze, [])
+    npt.assert_array_equal(c.squeeze, [])
     self.assertEqual(c.num_boxes, 12)
 
   def test_init_single(self):
@@ -58,7 +58,7 @@ class BoxGeneratorTest(absltest.TestCase):
 
     self.assertEqual(Box(start=(0, 0, 0), size=(20, 20, 10)), c.outer_box)
     self.assertEqual(Box(start=(0, 0, 0), size=(1, 1, 1)), c.output)
-    self.assertEqual(c.squeeze, [])
+    npt.assert_array_equal(c.squeeze, [])
     self.assertEqual(c.num_boxes, 1)
 
   def test_generate(self):
@@ -391,8 +391,9 @@ class MultiBoxGeneratorTest(absltest.TestCase):
     outer_box = Box(start=(0, 0, 0), size=(20, 20, 10))
     sub_box_size = (15, 13, 6)
     overlap = (1, 2, 2)
-    multi_generator = m.MultiBoxGenerator([outer_box, outer_box], sub_box_size,
-                                          overlap)
+    multi_generator = m.MultiBoxGenerator(
+        [outer_box, outer_box], sub_box_size, overlap
+    )
     self.assertEqual(multi_generator.num_boxes, 16)
 
     self.assertEqual(multi_generator.index_to_generator_index(0), (0, 0))
@@ -401,19 +402,25 @@ class MultiBoxGeneratorTest(absltest.TestCase):
     self.assertEqual(multi_generator.index_to_generator_index(14), (1, 6))
     self.assertRaises(ValueError, multi_generator.index_to_generator_index, 16)
 
-    self.assertEqual([multi_generator.generate(i)[1] for i in range(8)],
-                     list(multi_generator.generators[0].boxes))
-    self.assertEqual([multi_generator.generate(i)[1] for i in range(8, 16)],
-                     list(multi_generator.generators[1].boxes))
+    self.assertEqual(
+        [multi_generator.generate(i)[1] for i in range(8)],
+        list(multi_generator.generators[0].boxes),
+    )
+    self.assertEqual(
+        [multi_generator.generate(i)[1] for i in range(8, 16)],
+        list(multi_generator.generators[1].boxes),
+    )
 
   def test_dataclass(self):
     outer_box = Box(start=(0, 0, 0), size=(20, 20, 10))
     sub_box_size = (15, 13, 6)
     overlap = (1, 2, 2)
-    multi_generator = m.MultiBoxGenerator([outer_box, outer_box], sub_box_size,
-                                          overlap)
+    multi_generator = m.MultiBoxGenerator(
+        [outer_box, outer_box], sub_box_size, overlap
+    )
     self.assertEqual(
-        multi_generator.to_json(indent=2), """{
+        multi_generator.to_json(indent=2),
+        """{
   "outer_boxes": [
     {
       "start": [
@@ -471,7 +478,8 @@ class MultiBoxGeneratorTest(absltest.TestCase):
     2
   ],
   "back_shift_small_boxes": false
-}""")
+}""",
+    )
     new_mbg = m.MultiBoxGenerator.from_json(multi_generator.to_json())
     self.assertEqual(multi_generator.num_boxes, new_mbg.num_boxes)
     npt.assert_array_equal(multi_generator.box_size, new_mbg.box_size)
