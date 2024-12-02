@@ -360,10 +360,13 @@ def register_default_config(
 def default_config(
     config_class: Type[T],
     config_type: DefaultConfigType | None = None,
-    overrides: dict[str, Any] | None = None,
+    overrides: file.PathLike | dict[str, Any] | None = None,
     fallback_to_em_2d: bool = True,
+    kvdriver: str = 'file',
 ) -> T:
   """Returns a default configuration for a given config type and class."""
+  if isinstance(overrides, file.PathLike):
+    overrides = file.load_json(overrides, kvdriver=kvdriver)
   if config_type is None and fallback_to_em_2d:
     logging.warning('No default config type specified, falling back to EM_2D.')
     config_type = DefaultConfigType.EM_2D
