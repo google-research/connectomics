@@ -22,11 +22,13 @@ Example usage:
 import copy
 import dataclasses
 import enum
+import json as json_lib
 import pprint
 from typing import Any, Iterable, Mapping, MutableMapping, Optional, Sequence, Union
 
 from absl import logging
 from connectomics.common import counters
+from connectomics.common import file
 from connectomics.common import import_util
 from connectomics.common import metadata_utils
 import dataclasses_json
@@ -785,6 +787,31 @@ class LowpassFilter(Filter):
         **filter_args)
 
 
+def _unsharp_mask(
+    data: np.ndarray, num_iterations: int = 1, cast_float64: bool = True,
+    **unsharp_mask_kwargs) -> np.ndarray:
+  """Unsharp masking filter."""
+  result = data if not cast_float64 else _cast_img(data, 'float64')
+  for _ in range(num_iterations):
+    result = skimage.filters.unsharp_mask(result, **unsharp_mask_kwargs)
+  return result if not cast_float64 else _cast_img(result, data.dtype)
+
+
+@gin.register
+class UnsharpMaskFilter(Filter):
+  """Runs unsharp masking over image."""
+
+  def __init__(self,
+               min_chunksize: Sequence[int] | None = None,
+               context_spec: MutableJsonSpec | None = None,
+               **filter_args):
+    super().__init__(
+        filter_fun=_unsharp_mask,
+        context_spec=context_spec,
+        min_chunksize=min_chunksize,
+        **filter_args)
+
+
 @gin.register
 class Interpolation(Decorator):
   """Interpolates input TensorStore."""
@@ -1533,3 +1560,175 @@ def build_decorator(spec: DecoratorSpec) -> Decorator:
   decorator_cls = import_util.import_symbol(spec.name, package)
   args = spec.args.values if spec.args else {}
   return decorator_cls(**args)
+
+
+@gin.register
+class IndexDimByInts(Decorator):
+  """Indexes a single dimension by integers loaded from JSON.
+
+  The JSON file is expected to contain a list of integer indices.
+  """
+
+  def __init__(self, dim: int | str, json_path: str):
+    """Index."""
+    super().__init__(context_spec=None)
+    self._dim = dim
+    self._json_path = json_path
+
+  def decorate(self, input_ts: ts.TensorStore) -> ts.TensorStore:
+    indices = json_lib.loads(file.Open(self._json_path, 'r').read())
+    return input_ts[ts.d[self._dim][indices]]
+
+
+@gin.register
+class DfOverF(Decorator):
+  """Normalizes fluorescence versus baseline."""
+
+  def __init__(self,
+               f0_spec: JsonSpec,
+               baseline: float | int,
+               context_spec: MutableJsonSpec | None = None):
+    """Normalizes fluorescence versus baseline.
+
+    Args:
+      f0_spec: Spec of TensorStore containing resting activity, e.g., obtained
+        by computing windowed percentiles of low activity.
+      baseline: Offset subtracted from f0.
+      context_spec: Spec for virtual chunked context overriding its defaults.
+    """
+    super().__init__(context_spec)
+    self._f0_spec = f0_spec
+    self._baseline = baseline
+
+  def decorate(self, input_ts: ts.TensorStore) -> ts.TensorStore:
+    """Wraps the input TensorStore with a dF / F0 virtual_chunked."""
+    f0_ts = ts.open(self._f0_spec).result()
+
+    def df_over_f_read(domain: ts.IndexDomain, array: np.ndarray,
+                       unused_read_params: ts.VirtualChunkedReadParameters):
+      f = np.array(input_ts[domain], dtype='float32')
+      f0 = np.array(f0_ts[domain], dtype='float32')
+      df = f - f0
+      f_base = f0 - self._baseline
+      f_base[f_base == 0] = 1
+      array[...] = df / f_base
+
+    schema = adjust_schema_for_chunksize(
+        ts.cast(input_ts, 'float32').schema,
+        f0_ts.chunk_layout.read_chunk.shape)
+    schema = adjust_schema_for_virtual_chunked(schema)
+    return ts.virtual_chunked(
+        df_over_f_read, schema=schema, context=self._context)
+
+
+def _compute_average_evoked_response(
+    data: np.ndarray,
+    condition_offsets: Sequence[int],
+    condition_period_offsets: Sequence[Sequence[int]],
+    condition_baselines_exclusive_max: Sequence[int] | None = None,
+    axis: int = 0,
+    pad_side: str = 'left',
+    return_difference: bool = True,
+):
+  """Computes average evoked response over stimulus repetitions from data.
+
+  Args:
+    data: numpy array of shape [timesteps, ...]
+    condition_offsets: integers indicating where conditions start and end.
+    condition_period_offsets: integers indicating for each condition where
+        its repeats start and end.
+    condition_baselines_exclusive_max: integers indicating the exclusive max
+      applied to periods before baseline computation. For example, this can
+      be used to exclude periods in the test set.
+    axis: axis over which to subtract average evoked response.
+    pad_side: which side of incomplete repeats to pad with nans. Padded nans are
+        not in the average but only affect alignment of timesteps.
+    return_difference: whether to return the difference between data and evoked
+      response, or the evoked response itself.
+
+  Returns:
+    average evoked response, or data with average evoked response subtracted.
+  """
+  if data.shape[axis] != condition_offsets[-1]:
+    raise ValueError(
+        f'Data length at axis {axis} does not match last condition offset.')
+  data = np.swapaxes(data, axis, 0)
+
+  if not condition_baselines_exclusive_max:
+    condition_baselines_exclusive_max = [None] * len(condition_period_offsets)
+  if len(condition_baselines_exclusive_max) != len(condition_period_offsets):
+    raise ValueError(
+        'Length of `condition_baselines_exclusive_max` does not match length of'
+        ' `condition_period_offsets`.'
+    )
+
+  for condition in range(len(condition_offsets) - 1):
+    t_start = condition_offsets[condition]
+    t_end = condition_offsets[condition + 1]
+    period_offsets = condition_period_offsets[condition]
+    if not period_offsets:  # no period, subtract mean over condition
+      baseline = data[t_start:t_end].mean(axis=0)
+      if return_difference:
+        data[t_start:t_end] = data[t_start:t_end] - baseline
+      else:
+        data[t_start:t_end] = baseline
+      continue
+    assert sum(period_offsets) == t_end - t_start, 'Offset and periods mismatch'
+
+    # collect, pad, and compute period templates for baseline
+    periods = []
+    t_current = t_start
+    period_max = max(period_offsets)
+    for period, _ in enumerate(period_offsets):
+      period_data = data[t_current:t_current + period_offsets[period]]
+      dims = period_data.ndim
+      if pad_side == 'left':
+        t_padding = (period_max - period_data.shape[0], 0)
+      else:
+        assert pad_side == 'right'
+        t_padding = (0, period_max - period_data.shape[0])
+      pad_width = [t_padding] + [(0, 0)] * (dims - 1)
+      period_data = np.pad(
+          period_data,
+          pad_width=pad_width,
+          mode='constant',
+          constant_values=np.nan
+      )
+      periods.append(period_data)
+      t_current += period_offsets[period]
+    assert t_current == t_end
+    period = np.nanmean(
+        np.stack(periods, axis=0)[
+            : condition_baselines_exclusive_max[condition]
+        ],
+        axis=0,
+    )
+
+    # subtract average evoked response from each repeat
+    t_current = t_start
+    for period_offset in period_offsets:
+      baseline = (period[-period_offset:] if pad_side == 'left'
+                  else period[:period_offset])
+      if return_difference:
+        data[t_current:t_current + period_offset] = (
+            data[t_current:t_current + period_offset] - baseline)
+      else:
+        data[t_current:t_current + period_offset] = baseline
+      t_current += period_offset
+  data = np.swapaxes(data, 0, axis)
+  return data
+
+
+@gin.register
+class AverageEvokedResponseFilter(Filter):
+  """Computes average evoked response over stimulus repetitions."""
+
+  def __init__(self,
+               min_chunksize: Sequence[int] | None = None,
+               context_spec: MutableJsonSpec | None = None,
+               **filter_args):
+    super().__init__(
+        filter_fun=_compute_average_evoked_response,
+        context_spec=context_spec,
+        min_chunksize=min_chunksize,
+        **filter_args)

@@ -296,6 +296,15 @@ class DecoratorsTest(absltest.TestCase):
         vc[...].read().result(),
         scipy.stats.zscore(self._data[...], **filter_args))
 
+  def test_unsharp_mask_filter(self):
+    filter_args = {'num_iterations': 2, 'amount': 0.3, 'radius': 2.}
+    dec = decorators.UnsharpMaskFilter(
+        min_chunksize=self._data.shape, **filter_args)
+    vc = dec.decorate(self._data)
+    res = vc[...].read().result()
+    np.testing.assert_equal(
+        res, decorators._unsharp_mask(np.array(self._data), **filter_args))
+
   def test_max_projection(self):
     for projection_dim in (0, 1):
       dec = decorators.MaxProjection(projection_dim=projection_dim)
@@ -530,6 +539,104 @@ class DecoratorsTest(absltest.TestCase):
     np.testing.assert_equal(
         np.array([[1.5, 3], [4.5, 6]], dtype=np.float32),
         vc[...].read().result())
+
+  def test_index_dim_by_ints(self):
+    f = self.create_tempfile(content='[0, 1]')
+    dec = decorators.IndexDimByInts(dim=0, json_path=f.full_path)
+    vc = dec.decorate(self._data)
+    res = vc.read().result()
+    self.assertEqual(res.shape, (2, 10, 10), 'Shape mismatch.')
+
+  def test_df_over_f(self):
+    dtype = 'float32'
+
+    f_spec = {
+        'driver': 'n5',
+        'kvstore': {
+            'driver': 'file',
+            'path': self.create_tempdir().full_path,
+        },
+        'metadata': {
+            'dataType': dtype,
+            'dimensions': (10,),
+        },
+        'create': True,
+        'delete_existing': True,
+    }
+    f = ts.open(f_spec).result()
+    f_data = np.array(np.random.uniform(size=f.schema.shape), dtype=dtype)
+    f[...] = f_data
+
+    f0_spec = f_spec
+    f0_spec['kvstore']['path'] = self.create_tempdir().full_path
+    f0 = ts.open(f0_spec).result()
+    f0_data = np.array(np.random.uniform(size=f0.schema.shape), dtype=dtype)
+    f0[...] = f0_data
+    f0_spec['create'] = False
+    f0_spec['delete_existing'] = False
+    f0_spec['open'] = True
+
+    baseline = 0.42
+    df_over_f = (f_data - f0_data) / (f0_data - baseline)
+
+    dec = decorators.DfOverF(f0_spec=f0_spec, baseline=baseline)
+    vc = dec.decorate(f)
+    np.testing.assert_equal(vc[...].read().result(), df_over_f)
+
+  def test_evoked_response_filter_periodic(self):
+    data = np.linspace(0, 9, 10).reshape(-1, 1)
+    filter_args = {
+        'condition_offsets': [0, 10],
+        'condition_period_offsets': [[3, 3, 4],],
+        'pad_side': 'left'
+    }
+    filtered = decorators._compute_average_evoked_response(
+        data.copy(), **filter_args)
+    # [0, 1, 2], [3, 4, 5], [6, 7, 8, 9], pad left with nan, take average
+    average_response = np.array([6, 10 / 3, 13 / 3, 16 / 3]).reshape(-1, 1)
+    np.testing.assert_equal(filtered[-4:], data[-4:] - average_response)
+
+  def test_evoked_response_filter_aperiodic(self):
+    data = np.linspace(0, 9, 10).reshape(-1, 1)
+    filter_args = {
+        'condition_offsets': [0, 10],
+        'condition_period_offsets': [[],],
+    }
+    average_response = data.mean()
+    filtered = decorators._compute_average_evoked_response(
+        data.copy(), **filter_args)
+    np.testing.assert_equal(filtered, data - average_response)
+
+  def test_evoked_response_filter_periodic_with_exclusive_max(self):
+    data = np.linspace(0, 13, 14).reshape(-1, 1)
+    filter_args = {
+        'condition_offsets': [0, 14],
+        'condition_period_offsets': [[3, 3, 4, 4],],
+        'condition_baselines_exclusive_max': [-1,],
+        'pad_side': 'left',
+        'return_difference': False,
+    }
+    filtered = decorators._compute_average_evoked_response(
+        data.copy(), **filter_args)
+    # [0, 1, 2], [3, 4, 5], [6, 7, 8, 9], pad left with nan, take average
+    average_response = np.array([6, 10 / 3, 13 / 3, 16 / 3]).reshape(-1, 1)
+    np.testing.assert_equal(filtered[-4:], average_response)
+
+  def test_evoked_response_decorator(self):
+    filter_args = {
+        'condition_offsets': [0, 10],
+        'condition_period_offsets': [[3, 3, 4],],
+        'axis': 1,
+        'pad_side': 'left'
+    }
+    dec = decorators.AverageEvokedResponseFilter(
+        min_chunksize=self._data.shape, **filter_args)
+    vc = dec.decorate(self._data)
+    res = vc[...].read().result()
+    np.testing.assert_equal(
+        res,
+        decorators._compute_average_evoked_response(
+            np.array(self._data), **filter_args))
 
 
 def get_written_tensorstores(
