@@ -15,9 +15,9 @@
 """Processors for contrast adjustment."""
 
 from connectomics.common import geom_utils
+from connectomics.volume import mask as mask_lib
 from connectomics.volume import subvolume
 from connectomics.volume import subvolume_processor
-
 import numpy as np
 from scipy import ndimage
 import skimage.exposure
@@ -26,17 +26,25 @@ import skimage.exposure
 class PlaneProcessor(subvolume_processor.SubvolumeProcessor):
   """Abstract base class for plane-wise Processors."""
 
-  def __init__(self, plane='yx'):
+  def __init__(
+      self, plane='yx', mask_configs: str | mask_lib.MaskConfigs | None = None
+  ):
     """Constructor.
 
     Args:
       plane: 2-char string describing the plane within which to compute the
         transformation; one of: (yx, zy, zx)
+      mask_configs: Optional mask where positive values indicate regions of the
+        image that should not contribute to contrast estimation.
     """
     super().__init__()
     assert len(set(plane)) == 2
     assert not set(plane) - set('xyz')
     self._plane = plane
+    if mask_configs is not None and isinstance(mask_configs, str):
+      mask_configs = self._get_mask_configs(mask_configs)
+
+    self._mask_configs = mask_configs
 
   def process_plane(self, image2d: np.ndarray):
     raise NotImplementedError()
@@ -48,8 +56,14 @@ class PlaneProcessor(subvolume_processor.SubvolumeProcessor):
     other = dims.index(list(set('xyz') - set(self._plane))[0])
     plane = [dims.index(x) for x in self._plane]
 
+    mask = None
+    if self._mask_configs is not None:
+      mask = self._build_mask(self._mask_configs, box)
+
     desired = [0, other, plane[0], plane[1]]
     transposed = np.ascontiguousarray(np.transpose(input_ndarray, desired))
+    if mask is not None:
+      mask = np.ascontiguousarray(np.transpose(mask, np.array(desired[1:]) - 1))
 
     output_dtype = self.output_type(input_ndarray.dtype)
     if output_dtype == input_ndarray.dtype:
@@ -57,9 +71,27 @@ class PlaneProcessor(subvolume_processor.SubvolumeProcessor):
     else:
       output = np.zeros_like(transposed, dtype=output_dtype)
 
+    rng = np.random.default_rng(42)
     for c in range(transposed.shape[0]):
       for z in range(transposed.shape[1]):
-        output[c, z, ...] = self.process_plane(transposed[c, z, ...])
+        m = orig = None
+        inp = transposed[c, z, ...]
+
+        # Fill masked areas with pixels randomly resampled from unmasked areas.
+        # The contrast normalization methods we use do not rely on the spatial
+        # structure of the image, just the local histogram.
+        if mask is not None:
+          inp = inp.copy()
+          m = mask[z, ...]
+          if np.any(m) and not np.all(m):
+            fill = rng.choice(inp[~m], size=np.sum(m), replace=True)
+            orig = inp[m]
+            inp[m] = fill
+
+        output[c, z, ...] = self.process_plane(inp)
+
+        if orig is not None:
+          output[c, z, ...][m] = orig
 
     output = np.transpose(output, np.argsort(desired))
     return self.crop_box_and_data(box, output)
@@ -77,7 +109,8 @@ class CLAHE(PlaneProcessor):
       clip_limit=0.01,
       clip_min=None,
       clip_max=None,
-      invert=False
+      invert=False,
+      mask_configs: str | mask_lib.MaskConfigs | None = None,
   ):
     """Constructor.
 
@@ -88,8 +121,10 @@ class CLAHE(PlaneProcessor):
       clip_min: Minimum value to retain in the input to CLAHE.
       clip_max: Maximum value to retain in the input to CLAHE.
       invert: Whether to invert the CLAHE result.
+      mask_configs: Optional mask where positive values indicate regions of the
+        image that should not contribute to contrast estimation.
     """
-    super(CLAHE, self).__init__(plane)
+    super(CLAHE, self).__init__(plane, mask_configs)
     self._kernel_size = kernel_size
     self._clip_limit = clip_limit
     self._invert = invert
@@ -191,12 +226,8 @@ class VarianceOfLaplacian(SectionStd):
 
   crop_at_borders = False
 
-  def __init__(
-      self, plane='yx', block_radius=10, sigma=1.0, scale=64
-  ):
-    super(VarianceOfLaplacian, self).__init__(
-        plane, block_radius
-    )
+  def __init__(self, plane='yx', block_radius=10, sigma=1.0, scale=64):
+    super(VarianceOfLaplacian, self).__init__(plane, block_radius)
     self._sigma = sigma
     self._scale = scale
 
