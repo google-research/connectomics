@@ -92,6 +92,10 @@ class GrainUtilTest(absltest.TestCase):
       res = op.map(res)
     np.testing.assert_allclose(res['x'], expected)
 
+    transformations_with_extra_pipe = grain_util.parse(
+        'clip_values()|shift_and_divide_values(divisor=2.)|', all_ops)
+    assert len(transformations_with_extra_pipe) == 2
+
 
 if __name__ == '__main__':
   absltest.main()

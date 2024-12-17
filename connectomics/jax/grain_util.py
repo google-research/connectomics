@@ -316,6 +316,7 @@ def parse(spec: str, available_ops: list[tuple[str, Any]]
     transformations = [
         _parse_single_preprocess_op(s, available_ops)
         for s in spec.split('|')
+        if s.strip()
     ]
 
   return transformations
