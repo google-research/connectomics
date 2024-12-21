@@ -14,7 +14,6 @@
 # limitations under the License.
 """Utilities for model checkpointing."""
 
-import dataclasses
 import re
 from typing import Any, Optional, Sequence, TypeVar
 
