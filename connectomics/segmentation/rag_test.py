@@ -33,6 +33,14 @@ class RagTest(absltest.TestCase):
     g = rag.from_set(kdts)
     self.assertTrue(nx.utils.edges_equal(g.edges(), ((1, 2), (2, 3))))
 
+    # All segments will be connected in the 1st (subquadratic) pass.
+    g2 = rag.from_set_nn(kdts, max_dist=10)
+    self.assertTrue(nx.utils.graphs_equal(g, g2))
+
+    # All segments will be connected in the 2nd (quadratic) pass.
+    g2 = rag.from_set_nn(kdts, max_dist=0.1)
+    self.assertTrue(nx.utils.graphs_equal(g, g2))
+
   def test_from_set_skeletons(self):
     # Each segment is associated with a short skeleton fragment.
     skels = {
@@ -71,6 +79,14 @@ class RagTest(absltest.TestCase):
 
     self.assertEqual(g.edges[2, 3]['idx'][2], 3)
     self.assertEqual(g.edges[2, 3]['idx'][3], 2)
+
+    # All segments will be connected in the 1st (subquadratic) pass.
+    g2 = rag.from_set_nn(kdts, max_dist=10)
+    self.assertTrue(nx.utils.graphs_equal(g, g2))
+
+    # All segments will be connected in the 2nd (quadratic) pass.
+    g2 = rag.from_set_nn(kdts, max_dist=0.1)
+    self.assertTrue(nx.utils.graphs_equal(g, g2))
 
   def test_from_subvolume(self):
     seg = np.zeros((10, 10, 2), dtype=np.uint64)
