@@ -222,6 +222,17 @@ def build_mask(
                 size=fov.size[::-1],
                 origin=fov.size[::-1] // 2 + fov.start[::-1],
             )
+        # When using an upsampled mask, the mask could be not the exactly same
+        # size as the input image (i.e., -1 offset), we need to pad the mask to
+        # match the image size.
+        if curr_mask.shape != bool_mask.shape:
+          padding = [
+              (0, curr_mask.shape[dim] - bool_mask.shape[dim])
+              for dim in range(len(curr_mask.shape))
+          ]
+          bool_mask = np.pad(
+              bool_mask, padding, mode='constant', constant_values=0
+          )
         curr_mask |= bool_mask
 
     if config.invert:
