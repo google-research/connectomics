@@ -14,7 +14,9 @@
 # limitations under the License.
 """TensorStore utilities."""
 
+import json
 from typing import Any, Mapping
+
 import tensorstore as ts
 
 
@@ -30,3 +32,16 @@ def write_json(to_write: Mapping[str, Any],
           kvstore=kvstore,
       ), context=context).result().write(to_write).result()
   return to_write
+
+
+def load_json(kvstore: ts.KvStore.Spec,
+              context: ts.Context = None) -> Mapping[str, Any]:
+  """Load JSON data using TensorStore driver."""
+  if context is None:
+    context = ts.Context()
+  ds = ts.open(
+      dict(
+          driver='json',
+          kvstore=kvstore,
+      ), context=context).result()
+  return json.loads(str(ds.read().result()))
