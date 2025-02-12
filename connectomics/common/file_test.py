@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for file."""
 
 import dataclasses
 import os
@@ -184,6 +183,107 @@ class FileTest(absltest.TestCase):
       f.write(ts_conf.to_json())
     new_conf = loader(fname)
     self.assertEqual(new_conf, ts_conf)
+
+  def test_tensorstore_path(self):
+
+    # Auto-detection of format not supported.
+    with self.assertRaises(ValueError):
+      _ = file.TensorStorePath('gs://my-bucket/path/to/volume')
+    ds = file.TensorStorePath(
+        'gs://my-bucket/path/to/volume.zarr.zip|zip:path/to/entry|zarr:'
+    )
+    self.assertEqual(ds.source.name, 'gs')
+    self.assertEqual(ds.source.path, 'my-bucket/path/to/volume.zarr.zip')
+    self.assertEqual(ds.adapters[0].name, 'zip')
+    self.assertEqual(ds.adapters[0].param, 'path/to/entry')
+    self.assertEqual(ds.format.driver, 'zarr')
+    self.assertEqual(ds.format.param, '')
+    self.assertEqual(
+        ds.uri,
+        'gs://my-bucket/path/to/volume.zarr.zip|zip:path/to/entry|zarr:',
+    )
+
+    ts_spec = file.TensorStorePath(
+        'gs://foo/bar.ocdbt/|ocdbt:path/to/entry|neuroglancer-precomputed:'
+    ).open_spec()
+    self.assertEqual(
+        ts_spec,
+        {
+            'driver': 'neuroglancer_precomputed',
+            'kvstore': {
+                'driver': 'ocdbt',
+                'path': 'path/to/entry',
+                'base': {
+                    'kvstore': 'gs://foo/bar.ocdbt/',
+                },
+            },
+        },
+    )
+
+  def test_tensorstore_path_file(self):
+    tmp_path = os.path.join(FLAGS.test_tmpdir, 'test_file')
+    ts_path = file.TensorStorePath(f'{tmp_path}|neuroglancer_precomputed:')
+    self.assertEqual(
+        ts_path.uri, f'file://{tmp_path}|neuroglancer_precomputed:'
+    )
+    ts_spec = ts_path.open_spec()
+    self.assertEqual(
+        ts_spec,
+        {
+            'driver': 'neuroglancer_precomputed',
+            'kvstore': f'file://{tmp_path}',
+        },
+    )
+    self.assertEqual(
+        file.TensorStorePath(f'{tmp_path}|neuroglancer_precomputed:').open_spec(
+            kvdriver='gfile'
+        ),
+        {
+            'driver': 'neuroglancer_precomputed',
+            'kvstore': f'gfile://{tmp_path}',
+        },
+    )
+
+  def test_tensorstore_path_http(self):
+    ts_path = file.TensorStorePath(
+        'http://www.example.com/path/to/volume|neuroglancer_precomputed:'
+    )
+    self.assertEqual(
+        ts_path.open_spec(),
+        {
+            'driver': 'neuroglancer_precomputed',
+            'kvstore': 'http://www.example.com/path/to/volume',
+        },
+    )
+
+  def test_tensorstore_path_volumestore(self):
+    ts_path = file.TensorStorePath(
+        'gfile:///an/internal/path/to/volume|volumestore:'
+    )
+    self.assertEqual(
+        ts_path.open_spec(),
+        {
+            'driver': 'volumestore',
+            'volinfo_path': '/an/internal/path/to/volume.volinfo',
+        },
+    )
+
+    ts_path = file.TensorStorePath(
+        'gfile:///an/internal/path/to/volume.volinfo|volumestore:'
+    )
+    self.assertEqual(
+        ts_path.open_spec(),
+        {
+            'driver': 'volumestore',
+            'volinfo_path': '/an/internal/path/to/volume.volinfo',
+        },
+    )
+
+    with self.assertRaises(ValueError):
+      ts_path = file.TensorStorePath(
+          'gs://my-bucket/path/to/volume.volinfo|volumestore:'
+      )
+      ts_path.open_spec()
 
 
 if __name__ == '__main__':

@@ -14,13 +14,13 @@
 # limitations under the License.
 """Shim for supporting internal and external file IO."""
 
-from __future__ import annotations
-
+import dataclasses
 import functools
 import json
 import pathlib
 import typing
 from typing import Any, Callable, Type, TypeVar, Union
+import urllib.parse
 
 from absl import logging
 import dataclasses_json
@@ -36,6 +36,7 @@ def save_dataclass_json(
     path: PathLike,
     json_path: str | None = None,
     kvdriver: str = 'file',
+    kvstore: dict[str, Any] | None = None,
 ):
   """Save a dataclass to a file.
 
@@ -43,11 +44,14 @@ def save_dataclass_json(
     dataclass_instance: Dataclass to save.
     path: Path to save to.
     json_path: Optional path to save to within the file.
-    kvdriver: Driver to use for saving.
+    kvdriver: Driver to use for saving when using the file driver.
+    kvstore: Optional override for the kvstore to pass to TensorStore.
   """
+  if kvstore is None:
+    kvstore = {'driver': kvdriver, 'path': str(path)}
   spec = {
       'driver': 'json',
-      'kvstore': {'driver': kvdriver, 'path': str(path)},
+      'kvstore': kvstore,
   }
   if json_path is not None:
     if not json_path.startswith('/'):
@@ -55,6 +59,161 @@ def save_dataclass_json(
     spec['json_pointer'] = json_path
   meta_ts = ts.open(spec).result()
   meta_ts.write(dataclass_instance.to_dict()).result()
+
+
+@dataclasses.dataclass
+class TensorStoreDataSourceAdapter:
+  """TensorStore data source adapter.
+
+  Attributes:
+    name: Name of the adapter type.
+    param: Parameter to the adapter.
+  """
+
+  name: str
+  param: str
+
+
+@dataclasses.dataclass
+class TensorStoreDataSource:
+  """TensorStore data source, following the Neuroglancer data source format.
+
+  Attributes:
+    name: Name of the source.
+    path: Path to the source.
+    adapters: List of adapters applied to the source.
+    uri: TensorStore data source URI. Format is <source>(|<optional-adapters>),
+      or using TensorStore terms <kvstore-url>(|<optional-adapters>).
+      Example: gs://my-bucket/path/to/volume.zarr.zip|zip:path/to/entry
+  """
+
+  name: str
+  path: str
+  adapters: list['TensorStoreDataFormat'] = dataclasses.field(
+      default_factory=list
+  )
+
+  @property
+  def uri(self) -> str:
+    return f'{self.name}:{self.path}'
+
+
+@dataclasses.dataclass
+class TensorStoreDataFormat:
+  """TensorStore data format adapter.
+
+  Attributes:
+    driver: Name of the format driver.
+    param: Additional parameters passed to the driver.
+  """
+
+  driver: str
+  param: str | None = None
+
+
+@dataclasses.dataclass
+class TensorStorePath:
+  """TensorStore data source, following the Neuroglancer data source format.
+
+  Source: https://neuroglancer-docs.web.app/datasource/index.html
+
+  Attributes:
+    uri: TensorStore path. Format is <source>(|<optional-adapters>)|<format>:,
+      or using TensorStore terms <kvstore-url>(|<optional-adapters>)|<driver>:.
+      Example: gs://my-bucket/path/to/volume.zarr.zip|zip:path/to/entry|zarr:
+  """
+
+  uri: str
+
+  def open_spec(self, kvdriver='file') -> dict[str, Any]:
+    """Returns a TensorStore spec that can be used to open the TensorStore."""
+    # TODO(timblakely): Support other formats.
+    spec = {}
+
+    # Special case
+    match self.format.driver:
+      case 'neuroglancer_precomputed' | 'neuroglancer-precomputed':
+        spec['driver'] = 'neuroglancer_precomputed'
+      case 'volumestore' | 'volinfo':
+        # Note
+        # that Volumestore does not support adapters, so we can safely return
+        # early here.
+        path = self.source.path
+        if not path.endswith('.volinfo'):
+          path = f'{path}.volinfo'
+        spec['driver'] = 'volumestore'
+        spec['volinfo_path'] = path
+        return spec
+      case _:
+        raise ValueError(
+            f'Unknown TensorStore format driver: {self.format.driver}'
+        )
+
+    if self.source.name == 'file':
+      spec['kvstore'] = f'{kvdriver}://{self.source.path}'
+    else:
+      spec['kvstore'] = f'{self.source.name}://{self.source.path}'
+
+    if not self.adapters:
+      return spec
+
+    # There are adapters, so we need to add them to the spec.
+    base_spec = {'kvstore': spec['kvstore']}
+    for adapter in self.adapters:
+      adapter_spec = {
+          'driver': adapter.name,
+          'path': adapter.param,
+          'base': base_spec,
+      }
+      base_spec = adapter_spec
+    spec['kvstore'] = base_spec
+    return spec
+
+  @property
+  def source(self) -> TensorStoreDataSource:
+    """Returns the source (kvstore-url) of the TensorStore."""
+    return TensorStoreDataSource(*self._parts[0].split('://', 1), self.adapters)
+
+  @property
+  def adapters(self) -> list[TensorStoreDataSourceAdapter]:
+    """Returns the adapters (if any) applied to the source kvstore."""
+    return [
+        TensorStoreDataSourceAdapter(*a.split(':', 1))
+        for a in self._parts[1:-1]
+    ]
+
+  @property
+  def format(self) -> TensorStoreDataFormat:
+    """Returns the storage format (driver) of the TensorStore."""
+    driver, param = self._parts[-1].split(':', 1)
+    driver = driver.replace('-', '_')
+    return TensorStoreDataFormat(driver, param)
+
+  @property
+  def _parts(self) -> list[str]:
+    return self.uri.split('|')
+
+  @classmethod
+  def from_tensorstore(cls, vol: ts.TensorStore) -> 'TensorStorePath':
+    # TODO(timblakely): Support adapters when TensorStore does.
+    path = f'{vol.spec().kvstore.url}|{vol.spec().to_json()["driver"]}:'
+    return cls(path)
+
+  def __post_init__(self):
+    if self.uri.startswith('/'):
+      safe_uri = urllib.parse.quote(self.uri, safe=':|/\\')
+      self.uri = f'file://{safe_uri}'
+    if len(self._parts) < 2:
+      raise ValueError(
+          'TensorStore URI must contain at least 2 parts: <source>|<format>.'
+          ' Auto-detection of format not yet supported.'
+      )
+    # Double-check that the source kvstore is backed by gfile, as
+    # Volumestore's TensorStore driver depends on sstables via gfile.
+    if self.format.driver == 'volumestore' and not self.source.name.startswith(
+        'gfile'
+    ):
+      raise ValueError('Volumestore TensorStore driver requires gfile kvstore.')
 
 
 def dataclass_from_serialized(
