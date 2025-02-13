@@ -45,6 +45,13 @@ counter = COUNTER_STORE.get_counter
 timer_counter = COUNTER_STORE.timer_counter
 
 
+@dataclasses.dataclass(frozen=True)
+class ProcessingConfig(dataclasses_json.DataClassJsonMixin):
+  overlap: list[int] | None = None
+  # None defaults to the processor's subvolume_size.
+  subvolume_size: list[int] | None = None
+
+
 def dataclass_configuration(cls: ...) -> Optional[Type]:  # pylint:disable=g-bare-generic
   init_params = inspect.signature(cls.__init__).parameters
   if 'config' in init_params:
@@ -52,6 +59,7 @@ def dataclass_configuration(cls: ...) -> Optional[Type]:  # pylint:disable=g-bar
     return init_params['config'].annotation
 
 
+# TODO(timblakely): Remove this legacy configuration.
 @dataclasses.dataclass
 class SubvolumeProcessorConfig(dataclasses_json.DataClassJsonMixin):
   """Configuration for a given subvolume processor."""
@@ -365,6 +373,13 @@ def default_config(
     kvdriver: str = 'file',
 ) -> T:
   """Returns a default configuration for a given config type and class."""
+  if overrides and not isinstance(overrides, dict):
+    try:
+      return file.dataclass_from_serialized(config_class, overrides)
+    except KeyError:
+      pass
+  if not overrides:
+    overrides = None
   if isinstance(overrides, file.PathLike):
     overrides = file.load_json(overrides, kvdriver=kvdriver)
   if config_type is None and fallback_to_em_2d:
