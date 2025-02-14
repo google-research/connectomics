@@ -219,7 +219,6 @@ class TensorStorePath:
 def dataclass_from_serialized(
     target: Type[T],
     serialized: Union[str, PathLike],
-    kvdriver: str = 'file',
     infer_missing_fields: bool = False,
 ) -> T:
   """Load a dataclass from a serialized instance, file path, or dict.
@@ -228,7 +227,6 @@ def dataclass_from_serialized(
     target: Dataclass to load
     serialized: Serialized instance, file path, or dict to create dataclass
       from.
-    kvdriver: Driver to use for loading.
     infer_missing_fields: Whether to infer missing fields.
 
   Returns:
@@ -250,7 +248,6 @@ def dataclass_from_serialized(
   return load_dataclass_json(
       target,
       as_str,
-      kvdriver=kvdriver,
       infer_missing_fields=infer_missing_fields,
   )
 
@@ -258,7 +255,6 @@ def dataclass_from_serialized(
 def load_json(
     json_or_path: str | PathLike,
     json_path: str | None = None,
-    kvdriver: str = 'file',
 ) -> dict[str, Any]:
   """Load a JSON object from a string or file path via TensorStore."""
   try:
@@ -270,7 +266,7 @@ def load_json(
   path = json_or_path
   spec = {
       'driver': 'json',
-      'kvstore': {'driver': kvdriver, 'path': str(path)},
+      'kvstore': str(path),
   }
   if json_path is not None:
     if not json_path.startswith('/'):
@@ -283,7 +279,6 @@ def load_dataclass_json(
     dataclass_type: Type[T],
     path: PathLike,
     json_path: str | None = None,
-    kvdriver: str = 'file',
     infer_missing_fields: bool = False,
 ) -> T:
   """Load a dataclass from a file path.
@@ -292,14 +287,13 @@ def load_dataclass_json(
     dataclass_type: Dataclass to load
     path: Path to load from.
     json_path: Optional path to load from within the file.
-    kvdriver: Driver to use for loading.
     infer_missing_fields: Whether to infer missing fields.
 
   Returns:
     New dataclass instance.
   """
   return dataclass_type.from_dict(
-      load_json(path, json_path, kvdriver),
+      load_json(path, json_path),
       infer_missing=infer_missing_fields,
   )
 

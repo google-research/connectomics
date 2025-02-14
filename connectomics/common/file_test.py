@@ -50,20 +50,20 @@ class FileTest(absltest.TestCase):
     a = TestDataClass(a=1, b='foo', c=1.0)
     fname = os.path.join(FLAGS.test_tmpdir, 'dc_file')
     file.save_dataclass_json(a, fname)
-    b = file.load_dataclass_json(TestDataClass, fname)
+    b = file.load_dataclass_json(TestDataClass, f'file://{fname}')
     self.assertEqual(a, b)
 
     a = AnotherTestDataClass(a=1, b='foo', c=1.0, inner=a)
     file.save_dataclass_json(a, fname)
 
-    inner = file.load_dataclass_json(TestDataClass, fname, '/inner')
+    inner = file.load_dataclass_json(TestDataClass, f'file://{fname}', '/inner')
     self.assertEqual(inner, a.inner)
 
   def test_dataclass_from_serialized(self):
     a = TestDataClass(a=1, b='foo', c=1.0)
     fname = os.path.join(FLAGS.test_tmpdir, 'dc_file')
     file.save_dataclass_json(a, fname)
-    b = file.dataclass_from_serialized(TestDataClass, fname)
+    b = file.dataclass_from_serialized(TestDataClass, f'file://{fname}')
     self.assertEqual(a, b)
     c = file.dataclass_from_serialized(TestDataClass, a.to_json())
     self.assertEqual(a, c)
