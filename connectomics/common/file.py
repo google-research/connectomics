@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 The Google Research Authors.
+# Copyright 2025 The Google Research Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,9 +26,12 @@ from absl import logging
 import dataclasses_json
 import tensorstore as ts
 
+PathLike = Union[str, pathlib.PurePath]
 
 T = TypeVar('T', bound=dataclasses_json.DataClassJsonMixin)
-PathLike = Union[str, pathlib.Path]
+
+# Local Alias
+Path = pathlib.Path
 
 
 def save_dataclass_json(
@@ -298,29 +301,6 @@ def load_dataclass_json(
   )
 
 
-# TODO(timblakely): Remove dependency on TF when there's a common API to read
-# files internally and externally.
-import tensorflow as tf
-
-Copy = tf.io.gfile.copy
-DeleteRecursively = tf.io.gfile.rmtree
-Exists = tf.io.gfile.exists
-Glob = tf.io.gfile.glob
-IsDirectory = tf.io.gfile.isdir
-ListDirectory = tf.io.gfile.listdir
-MakeDirs = tf.io.gfile.makedirs
-MkDir = tf.io.gfile.mkdir
-Open = tf.io.gfile.GFile
-Remove = tf.io.gfile.remove
-Rename = tf.io.gfile.rename
-Stat = tf.io.gfile.stat
-Walk = tf.io.gfile.walk
-
-GFile = tf.io.gfile.GFile
-
-NotFoundError = tf.errors.NotFoundError
-
-
 # TODO(timblakely): Remove in favor the above serialization.
 def load_dataclass(
     constructor: type[T], v: Union[str, dict[str, Any], T, None]
@@ -344,7 +324,7 @@ def load_dataclass(
       return constructor.from_json(v)
     except json.JSONDecodeError:
       # File path; attempt to load.
-      with Open(v) as f:
+      with Path(v).open() as f:
         return constructor.from_json(f.read())
   else:
     return constructor.from_dict(typing.cast(dict[str, Any], v))

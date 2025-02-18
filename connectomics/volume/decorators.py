@@ -1576,7 +1576,7 @@ class IndexDimByInts(Decorator):
     self._json_path = json_path
 
   def decorate(self, input_ts: ts.TensorStore) -> ts.TensorStore:
-    indices = json_lib.loads(file.Open(self._json_path, 'r').read())
+    indices = json_lib.loads(file.Path(self._json_path).read_text())
     return input_ts[ts.d[self._dim][indices]]
 
 

@@ -134,7 +134,7 @@ class FileTest(absltest.TestCase):
 
   def test_dataclass_from_file(self):
     fname = os.path.join(FLAGS.test_tmpdir, 'dc_file')
-    with file.Open(fname, 'w') as f:
+    with file.Path(fname).open('wt') as f:
       f.write("""{
         "spec": {
           "test": "foo"
@@ -179,7 +179,7 @@ class FileTest(absltest.TestCase):
     self.assertEqual(new_conf, ts_conf)
 
     fname = os.path.join(FLAGS.test_tmpdir, 'dc_loader')
-    with file.Open(fname, 'w') as f:
+    with file.Path(fname).open('wt') as f:
       f.write(ts_conf.to_json())
     new_conf = loader(fname)
     self.assertEqual(new_conf, ts_conf)

@@ -187,11 +187,11 @@ def model_from_dict_config(
 
 def save_config(config: ml_collections.ConfigDict, path: file.PathLike):
   """Saves model config to a file."""
-  with file.Open(path, 'w') as f:
+  with file.Path(path).open('wt') as f:
     f.write(config.to_json_best_effort() + '\n')
 
 
 def load_config(path: file.PathLike) -> ml_collections.ConfigDict:
   """Loads a model config from a file."""
-  with file.Open(path, 'r') as f:
+  with file.Path(path).open('rt') as f:
     return ml_collections.ConfigDict(json.loads(f.read()))

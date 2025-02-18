@@ -44,7 +44,7 @@ def load_equivalences(
   equiv_graph = nx.Graph()
 
   for path in paths:
-    with file.Open(path, "r") as f:
+    with file.Path(path).open("rt") as f:
       reader = pd.read_csv(
           f, sep=",", engine="c", comment="#", chunksize=4096, header=None
       )
@@ -64,13 +64,13 @@ def load_equivalences(
 
 def load_relabel_map(path: str) -> dict[int, int]:
   """Loads a label map from a text file."""
-  with file.Open(path) as f:
+  with file.Path(path).open("r") as f:
     df = pd.read_csv(f, engine="c", comment="#", header=None, dtype=np.uint64)
     return {int(a): int(b) for a, b in df.to_numpy(dtype=np.uint64)}
 
 
 def load_object_list(path: str) -> set[int]:
   """Loads an object list from a text file."""
-  with file.Open(path) as f:
+  with file.Path(path).open("r") as f:
     df = pd.read_csv(f, engine="c", comment="#", header=None, dtype=np.uint64)
     return set(int(x) for x in df.to_numpy(dtype=np.uint64).ravel())
