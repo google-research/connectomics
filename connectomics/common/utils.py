@@ -16,10 +16,12 @@
 
 import contextlib
 import dataclasses
+import io
 import itertools
 import re
 import time
 from typing import Any, Protocol, TypeVar
+import zlib
 
 from absl import logging
 import dataclasses_json
@@ -155,3 +157,41 @@ def update_dataclass(
 
   source = dataclasses.replace(source, **params)
   return source
+
+
+def serialize_array(
+    array: np.ndarray, compression: int | None = None) -> bytes:
+  """Serializes Numpy array.
+
+  Args:
+    array: Array to serialize.
+    compression: Optional compression; `zlib.compress` level.
+
+  Returns:
+    (Compressed) serialized array.
+  """
+  buffer = io.BytesIO()
+  np.save(buffer, np.asarray(array), allow_pickle=False)
+  if compression is None:
+    return buffer.getvalue()
+  else:
+    return zlib.compress(buffer.getvalue(), level=compression)
+
+
+def deserialize_array(array: bytes, decompress: bool = False) -> np.ndarray:
+  """Deserializes Array to NumPy.
+
+  Args:
+    array: (Compressed) serialized array obtained with `serialize_array`.
+    decompress: If True, decompresses with zlib.
+
+  Returns:
+    Deserialized array.
+  """
+  buffer = io.BytesIO()
+  if not decompress:
+    buffer.write(array)
+  else:
+    buffer.write(zlib.decompress(array))
+  buffer.seek(0)
+  return np.load(buffer)

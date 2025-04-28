@@ -329,3 +329,32 @@ def merge_internal_objects(bcc: list[AbstractSet[int]], aps: AbstractSet[int],
     bcc_relabel[bcc_i] = target
 
   return bcc_relabel
+
+
+def create_boundary_mask_volume(
+    shape: tuple[int, int, int],
+    before_xyz: tuple[int, int, int] = (0, 0, 0),
+    after_xyz: tuple[int, int, int] = (0, 0, 0)
+) -> np.ndarray:
+  """Creates a mask for the boundary of a volume.
+
+  Args:
+    shape: Shape of the volume.
+    before_xyz: Voxels to set to False at the beginning of each dimension.
+    after_xyz: Voxels to set to False at the end of each dimension.
+
+  Returns:
+    Boolean mask volume.
+  """
+  assert len(shape) == len(before_xyz) == len(after_xyz) == 3
+  mask = np.ones(shape, dtype=bool)
+  mask[:before_xyz[0], :, :] = False
+  mask[:, :before_xyz[1], :] = False
+  mask[:, :, :before_xyz[2]] = False
+  if after_xyz[0] > 0:
+    mask[-after_xyz[0]:, :, :] = False
+  if after_xyz[1] > 0:
+    mask[:, -after_xyz[1]:, :] = False
+  if after_xyz[2] > 0:
+    mask[:, :, -after_xyz[2]:] = False
+  return mask

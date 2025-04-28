@@ -60,6 +60,7 @@ from connectomics.common import bounding_box
 from connectomics.common import box_generator
 from connectomics.common import gin_utils  # pylint: disable=unused-import
 from connectomics.common import ts_utils
+import connectomics.segmentation.process  # pylint: disable=unused-import
 from connectomics.volume import decorators  # pylint: disable=unused-import
 import gin
 import numpy as np
