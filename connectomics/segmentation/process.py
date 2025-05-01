@@ -211,3 +211,14 @@ def ingest_tiff_segmentation(
 
   num_unique_labels = len(np.unique(out)[1:])
   logging.info('Wrote segmentation with %d unique labels.', num_unique_labels)
+
+
+@gin.configurable
+def write_boundary_mask_to_tensorstore(
+    output_spec: MutableJsonSpec = gin.REQUIRED,
+    shape: tuple[int, int, int] = gin.REQUIRED,
+    before_xyz: tuple[int, int, int] = (0, 0, 0),
+    after_xyz: tuple[int, int, int] = (0, 0, 0)):
+  """Writes a boundary mask volume to a TensorStore."""
+  out = ts.open(output_spec).result()
+  out[...] = labels.create_boundary_mask_volume(shape, before_xyz, after_xyz)
