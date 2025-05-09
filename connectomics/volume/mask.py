@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Utilites for dealing with 2d and 3d object masks."""
+"""Utilities for dealing with 2d and 3d object masks."""
 
 import dataclasses
 import threading
@@ -200,7 +200,7 @@ def build_mask(
         if chan_config.expression:
           bool_mask = eval(chan_config.expression)  # pylint: disable=eval-used
         elif chan_config.values:
-          bool_mask = np.in1d(channel_mask, chan_config.values).reshape(
+          bool_mask = np.isin(channel_mask, chan_config.values).reshape(
               channel_mask.shape
           )
         else:
