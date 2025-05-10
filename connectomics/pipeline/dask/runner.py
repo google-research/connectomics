@@ -52,7 +52,7 @@ class ProcessorOutput:
   # in CZYX format processed at an XYZ subvolume size of 350x300x400 would
   # result in the following chunksizes:
   #    ((1,), (350, 350, 300), (300, 300, 300, 100), (400, 400, 200))
-  dask_chunks: tuple[tuple[int]]
+  dask_chunks: tuple[tuple[int, ...], ...]
 
 
 class DaskTensorStoreWriter:
