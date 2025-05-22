@@ -117,3 +117,21 @@ class DecoratedVolume:
   decorator_specs: (
       str | decorators.DecoratorSpec | list[decorators.DecoratorSpec]
   )
+
+  def __post_init__(self):
+    if isinstance(self.decorator_specs, list):
+      specs = []
+      for spec in self.decorator_specs:
+        # Support old, internal format.
+        if 'decorator' in spec:
+          spec['name'] = spec['decorator']
+          del spec['decorator']
+        if 'kwargs' in spec:
+          spec['args'] = decorators.DecoratorArgs.from_dict(spec['kwargs'])
+          del spec['kwargs']
+        specs.append(decorators.DecoratorSpec.from_dict(spec))
+      object.__setattr__(
+          self,
+          'decorator_specs',
+          specs,
+      )
