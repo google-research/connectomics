@@ -21,11 +21,13 @@ from typing import Optional, Sequence, Union
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.common import tuples
 from connectomics.volume import metadata
 from connectomics.volume import subvolume
 import numpy as np
 
 Subvolume = subvolume.Subvolume
+XYZ = tuples.XYZ
 
 
 def slice_to_bbox(ind: array.CanonicalSlice) -> bounding_box.BoundingBox:
@@ -114,12 +116,12 @@ class Volume:
         subvol.data)
 
   @property
-  def volume_size(self) -> array.Tuple3i:
+  def volume_size(self) -> XYZ[int]:
     """Volume size in voxels, XYZ."""
     return self.meta.volume_size
 
   @property
-  def pixel_size(self) -> array.Tuple3f:
+  def pixel_size(self) -> XYZ[float]:
     """Size of an individual voxels in physical dimensions (Nanometers)."""
     return self.meta.pixel_size
 

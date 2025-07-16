@@ -43,9 +43,9 @@ IndexExpOrPointLookups = Union[ArbitrarySlice, PointLookups]
 CanonicalSliceOrPointLookups = Union[CanonicalSlice, PointLookups]
 
 ArrayLike = npt.ArrayLike
-Tuple3f = Tuple[float, float, float]
-Tuple3i = Tuple[int, int, int]
-Tuple4i = Tuple[int, int, int, int]
+Tuple3f = tuple[float, float, float]
+Tuple3i = tuple[int, int, int]
+Tuple4i = tuple[int, int, int, int]
 ArrayLike3d = Union[npt.ArrayLike, Tuple3f, Tuple3i]
 
 

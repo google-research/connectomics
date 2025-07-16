@@ -45,8 +45,8 @@ class VolumeMetadata(
     dtype: Datatype of the volume. Must be numpy compatible.
   """
   path: str
-  volume_size: XYZ[int] = tuples.named_tuple_field(XYZ[int])
-  pixel_size: XYZ[float] = tuples.named_tuple_field(XYZ[float])
+  volume_size: XYZ[int]
+  pixel_size: XYZ[float]
   bounding_boxes: list[bounding_box.BoundingBox] = dataclasses.field(
       default_factory=list
   )
