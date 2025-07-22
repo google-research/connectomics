@@ -23,6 +23,7 @@ the keyword argument `baseline`.
 from collections.abc import Callable
 from typing import Any, Sequence
 
+from absl import logging
 from clu import metric_writers
 from clu import metrics
 import flax
@@ -444,6 +445,9 @@ def create_classification_metrics(
       labels = np.array(values['labels'])
       logits = np.array(values['logits'])
 
+      logging.info('Processing labels (%r) and logits (%r)',
+                   labels.shape, logits.shape)
+
       labels = labels.ravel()
       logits = logits.reshape([-1, logits.shape[-1]])
 
@@ -469,12 +473,19 @@ def create_classification_metrics(
       precision, recall, f1, _ = (
           sklearn.metrics.precision_recall_fscore_support(labels, pred)
       )
-      roc_auc = sklearn.metrics.roc_auc_score(
-          labels, roc_prob, multi_class='ovr'
-      )
-      auc_pr = sklearn.metrics.average_precision_score(
-          labels_1hot, prob, average=None
-      )
+      try:
+        roc_auc = sklearn.metrics.roc_auc_score(
+            labels, roc_prob, multi_class='ovr'
+        )
+      except ValueError:
+        roc_auc = np.nan
+
+      try:
+        auc_pr = sklearn.metrics.average_precision_score(
+            labels_1hot, prob, average=None
+        )
+      except ValueError:
+        auc_pr = [np.nan] * len(self.classes)
 
       ret = {
           'roc_auc': roc_auc,
