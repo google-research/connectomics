@@ -445,8 +445,9 @@ def create_classification_metrics(
       labels = np.array(values['labels'])
       logits = np.array(values['logits'])
 
-      logging.info('Processing labels (%r) and logits (%r)',
-                   labels.shape, logits.shape)
+      logging.info(
+          'Processing labels (%r) and logits (%r)', labels.shape, logits.shape
+      )
 
       labels = labels.ravel()
       logits = logits.reshape([-1, logits.shape[-1]])
@@ -471,7 +472,9 @@ def create_classification_metrics(
         roc_prob = prob
 
       precision, recall, f1, _ = (
-          sklearn.metrics.precision_recall_fscore_support(labels, pred)
+          sklearn.metrics.precision_recall_fscore_support(
+              labels, pred, labels=list(range(len(self.classes)))
+          )
       )
       try:
         roc_auc = sklearn.metrics.roc_auc_score(

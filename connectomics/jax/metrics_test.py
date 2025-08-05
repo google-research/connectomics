@@ -180,6 +180,13 @@ class MetricsTest(absltest.TestCase):
     self.assertEqual(actual['recall__dend'], 1)
     self.assertEqual(actual['f1__dend'], 1)
 
+    # Ensure the computation works if not all classes are present in the labels.
+    m = cls.from_model_output(
+        logits=np.array([[l1, l2, l3], [l2, l3, l1], [l2, l1, l3]]),  # gdg
+        labels=np.array([0, 0, 1]),  # aad
+    )
+    actual = m.compute()
+
   def test_count(self):
     count = metrics.Count.from_fun(metrics.nonzero_weight)
     actual = count.from_model_output(
