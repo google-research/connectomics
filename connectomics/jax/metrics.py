@@ -95,11 +95,13 @@ def make_per_step_metric(
   def _per_step_metric(
       predictions: jnp.ndarray, targets: jnp.ndarray, **kwargs
   ) -> jnp.ndarray:
-    assert predictions.shape == targets.shape
+    assert (
+        predictions.shape == targets.shape
+    )
     assert len(targets.shape) >= 2
     kwargs['video'] = False  # Only needed for video_forecasting.metrics.ssim
     batch, timesteps = targets.shape[:2]
-    predictions = predictions.reshape(batch * timesteps, *targets.shape[2:])
+    predictions = predictions.reshape(batch * timesteps, *predictions.shape[2:])
     targets = targets.reshape(batch * timesteps, *targets.shape[2:])
     score = metric(predictions=predictions, targets=targets, **kwargs)
     return score.reshape(batch, timesteps)
