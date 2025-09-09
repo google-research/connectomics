@@ -292,9 +292,10 @@ class DecoratorsTest(absltest.TestCase):
     dec = decorators.ZScoreFilter(
         min_chunksize=self._data.shape, **filter_args)
     vc = dec.decorate(self._data)
+    undecorated_data = self._data[...].read().result()
     np.testing.assert_equal(
         vc[...].read().result(),
-        scipy.stats.zscore(self._data[...], **filter_args))
+        scipy.stats.zscore(undecorated_data, **filter_args))
 
   def test_unsharp_mask_filter(self):
     filter_args = {'num_iterations': 2, 'amount': 0.3, 'radius': 2.}
