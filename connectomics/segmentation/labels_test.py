@@ -82,7 +82,7 @@ class UtilsTest(absltest.TestCase):
     eroded = labels.erode(seg, radius=3)
 
     # Ignore any objects that were completely removed during erosion.
-    large_enough = np.logical_not(np.in1d(seg.ravel(),
+    large_enough = np.logical_not(np.isin(seg.ravel(),
                                           np.unique(eroded))).reshape(seg.shape)
     expanded, _ = labels.watershed_expand(seg, voxel_size=(1, 1, 1))
     np.testing.assert_array_equal(expanded[large_enough], seg[large_enough])

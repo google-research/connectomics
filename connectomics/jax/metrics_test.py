@@ -24,6 +24,7 @@ from connectomics.jax import metrics
 import dm_pix
 import jax.numpy as jnp
 import numpy as np
+from properscoring import _crps
 import scipy.special
 import sklearn.metrics
 
@@ -50,6 +51,8 @@ class MetricsTest(absltest.TestCase):
         * (self.boolean_precision * self.boolean_recall)
         / (self.boolean_precision + self.boolean_recall)
     )
+    self.targets = jnp.array([1, 1])
+    self.ensemble_predictions = jnp.array([[1, 2], [1, 3]])
 
   def test_mae_integration_against_pix_2d(self):
     mae_pix = dm_pix.mae(self.vol1[:, 0], self.vol2[:, 0])
@@ -180,12 +183,44 @@ class MetricsTest(absltest.TestCase):
     self.assertEqual(actual['recall__dend'], 1)
     self.assertEqual(actual['f1__dend'], 1)
 
+    # Ensure the computation works if not all classes are present in the labels.
+    m = cls.from_model_output(
+        logits=np.array([[l1, l2, l3], [l2, l3, l1], [l2, l1, l3]]),  # gdg
+        labels=np.array([0, 0, 1]),  # aad
+    )
+    actual = m.compute()
+
   def test_count(self):
     count = metrics.Count.from_fun(metrics.nonzero_weight)
     actual = count.from_model_output(
         weight=jnp.asarray([0.5, 0.0, 0.25]), mask=None
     ).compute()
     chex.assert_trees_all_close(actual, 2)
+
+  def test_ensemble_mean_mse(self):
+    actual = metrics.ensemble_mean_mse(self.ensemble_predictions, self.targets)
+    expected = jnp.array([0.5, 2])
+    chex.assert_trees_all_close(actual, expected)
+
+  def test_ensemble_mean_mae(self):
+    actual = metrics.ensemble_mean_mae(self.ensemble_predictions, self.targets)
+    expected = jnp.array([0.5, 1])
+    chex.assert_trees_all_close(actual, expected)
+
+  def test_ensemble_min_mse(self):
+    actual = metrics.ensemble_min_mse(self.ensemble_predictions, self.targets)
+    expected = jnp.array([0., 0.])
+    chex.assert_trees_all_close(actual, expected)
+
+  def test_ensemble_min_mae(self):
+    actual = metrics.ensemble_min_mae(self.ensemble_predictions, self.targets)
+    expected = jnp.array([0., 0.])
+    chex.assert_trees_all_close(actual, expected)
+
+  def test_ensemble_crps(self):
+    actual = metrics.ensemble_crps(self.ensemble_predictions, self.targets)
+    expected = _crps.crps_ensemble(self.targets, self.ensemble_predictions)
+    chex.assert_trees_all_close(actual, expected)
 
 
 if __name__ == '__main__':

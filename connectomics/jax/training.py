@@ -63,6 +63,8 @@ def get_optimizer(
         decay_steps=config.num_train_steps - config.num_warmup_steps,
         end_value=min_lr
     )
+  elif config.scheduler == "sgdr_schedule":
+    lr = optax.sgdr_schedule(config.sgdr_schedule_kwargs)
   else:
     lr = optax.constant_schedule(init_lr)
 

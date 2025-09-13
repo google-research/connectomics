@@ -156,7 +156,7 @@ def erode(labels: np.ndarray, radius: int = 2, min_size: int = 50):
     eroded = skimage.morphology.erosion(eroded, footprint=struct)
 
   # Preserve small components.
-  mask = np.in1d(labels.flat, small_segments).reshape(labels.shape)
+  mask = np.isin(labels.flat, small_segments).reshape(labels.shape)
   eroded[mask] = labels[mask]
   return eroded
 

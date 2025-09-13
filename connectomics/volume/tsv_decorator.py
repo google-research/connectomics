@@ -18,8 +18,12 @@ from typing import Any, Dict, Optional
 
 from connectomics.common import array
 from connectomics.common import bounding_box
+from connectomics.common import tuples
 from connectomics.volume import base
 import numpy as np
+
+
+XYZ = tuples.XYZ
 
 # List of python dicts of specs to decorate a volume. Expected to have the
 # following fields:
@@ -100,11 +104,11 @@ class VolumeDecorator(base.Volume):
     return self._wrapped.get_slices(slices)
 
   @property
-  def volume_size(self) -> array.Tuple3i:
+  def volume_size(self) -> XYZ[int]:
     return self._wrapped.volume_size
 
   @property
-  def voxel_size(self) -> array.Tuple3f:
+  def voxel_size(self) -> XYZ[float]:
     return self._wrapped.pixel_size
 
   @property

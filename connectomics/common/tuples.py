@@ -15,14 +15,15 @@
 """Type-safe tuple and NamedTuple utilities."""
 
 import dataclasses
-from typing import Any, Callable, Generic, NamedTuple, Type, TypeVar
+from typing import Any, Callable, Generic, Type, TypeVar
 import dataclasses_json
 
 T = TypeVar('T', int, float)
 C = TypeVar('C')
 
 
-class XYZ(Generic[T], NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class XYZ(Generic[T]):
   """XYZ is a named tuple for a 3-dimensional vector.
 
   Allows static type checker to differentiate between XYZ and ZYX, and allows
@@ -48,8 +49,18 @@ class XYZ(Generic[T], NamedTuple):
   def zyx(self) -> 'ZYX[T]':
     return ZYX(*self[::-1])
 
+  def __iter__(self):
+    return iter(dataclasses.astuple(self))
 
-class ZYX(Generic[T], NamedTuple):
+  def __getitem__(self, item):
+    return dataclasses.astuple(self)[item]
+
+  def __len__(self):
+    return 3
+
+
+@dataclasses.dataclass(frozen=True)
+class ZYX(Generic[T]):
   """ZYX is a named tuple for a 3-dimensional vector.
 
   Allows static type checker to differentiate between XYZ and ZYX, and allows
@@ -75,8 +86,18 @@ class ZYX(Generic[T], NamedTuple):
     # Defer to tuple equality.
     return self[:] == other
 
+  def __iter__(self):
+    return iter(dataclasses.astuple(self))
 
-class XYZC(Generic[T], NamedTuple):
+  def __getitem__(self, item):
+    return dataclasses.astuple(self)[item]
+
+  def __len__(self):
+    return 3
+
+
+@dataclasses.dataclass(frozen=True)
+class XYZC(Generic[T]):
   """XYZC is a named tuple for a 4-dimensional vector."""
 
   x: T
@@ -111,8 +132,18 @@ class XYZC(Generic[T], NamedTuple):
   def czyx(self) -> 'CZYX[T]':
     return CZYX(*self[::-1])
 
+  def __iter__(self):
+    return iter(dataclasses.astuple(self))
 
-class CZYX(Generic[T], NamedTuple):
+  def __getitem__(self, item):
+    return dataclasses.astuple(self)[item]
+
+  def __len__(self):
+    return 4
+
+
+@dataclasses.dataclass(frozen=True)
+class CZYX(Generic[T]):
   """CZYX is a named tuple for a 4-dimensional vector."""
 
   c: T
@@ -147,6 +178,15 @@ class CZYX(Generic[T], NamedTuple):
       )
     # Defer to tuple equality.
     return self[:] == other
+
+  def __iter__(self):
+    return iter(dataclasses.astuple(self))
+
+  def __getitem__(self, item):
+    return dataclasses.astuple(self)[item]
+
+  def __len__(self):
+    return 4
 
 
 def named_tuple_field(

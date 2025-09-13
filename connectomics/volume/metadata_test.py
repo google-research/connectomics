@@ -84,6 +84,18 @@ class VolumeMetadataTest(absltest.TestCase):
         scaled.bounding_boxes, [BBOX([20, 20, 10], [200, 200, 100])]
     )
 
+  def test_serialization(self):
+    meta = metadata.VolumeMetadata(
+        path='none',
+        volume_size=tuples.XYZ(100, 100, 100),
+        pixel_size=tuples.XYZ(8, 8, 30),
+        bounding_boxes=[BBOX([10, 10, 10], [100, 100, 100])],
+        num_channels=3,
+        dtype=np.int64)
+    serialized = meta.to_json()
+    deserialized = metadata.VolumeMetadata.from_json(serialized)
+    self.assertEqual(meta, deserialized)
+
 
 if __name__ == '__main__':
   absltest.main()

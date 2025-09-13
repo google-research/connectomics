@@ -23,6 +23,7 @@ the keyword argument `baseline`.
 from collections.abc import Callable
 from typing import Any, Sequence
 
+from absl import logging
 from clu import metric_writers
 from clu import metrics
 import flax
@@ -94,11 +95,13 @@ def make_per_step_metric(
   def _per_step_metric(
       predictions: jnp.ndarray, targets: jnp.ndarray, **kwargs
   ) -> jnp.ndarray:
-    assert predictions.shape == targets.shape
+    assert (
+        predictions.shape == targets.shape
+    )
     assert len(targets.shape) >= 2
     kwargs['video'] = False  # Only needed for video_forecasting.metrics.ssim
     batch, timesteps = targets.shape[:2]
-    predictions = predictions.reshape(batch * timesteps, *targets.shape[2:])
+    predictions = predictions.reshape(batch * timesteps, *predictions.shape[2:])
     targets = targets.reshape(batch * timesteps, *targets.shape[2:])
     score = metric(predictions=predictions, targets=targets, **kwargs)
     return score.reshape(batch, timesteps)
@@ -444,6 +447,10 @@ def create_classification_metrics(
       labels = np.array(values['labels'])
       logits = np.array(values['logits'])
 
+      logging.info(
+          'Processing labels (%r) and logits (%r)', labels.shape, logits.shape
+      )
+
       labels = labels.ravel()
       logits = logits.reshape([-1, logits.shape[-1]])
 
@@ -467,14 +474,23 @@ def create_classification_metrics(
         roc_prob = prob
 
       precision, recall, f1, _ = (
-          sklearn.metrics.precision_recall_fscore_support(labels, pred)
+          sklearn.metrics.precision_recall_fscore_support(
+              labels, pred, labels=list(range(len(self.classes)))
+          )
       )
-      roc_auc = sklearn.metrics.roc_auc_score(
-          labels, roc_prob, multi_class='ovr'
-      )
-      auc_pr = sklearn.metrics.average_precision_score(
-          labels_1hot, prob, average=None
-      )
+      try:
+        roc_auc = sklearn.metrics.roc_auc_score(
+            labels, roc_prob, multi_class='ovr'
+        )
+      except ValueError:
+        roc_auc = np.nan
+
+      try:
+        auc_pr = sklearn.metrics.average_precision_score(
+            labels_1hot, prob, average=None
+        )
+      except ValueError:
+        auc_pr = [np.nan] * len(self.classes)
 
       ret = {
           'roc_auc': roc_auc,
