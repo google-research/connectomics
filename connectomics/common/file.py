@@ -24,7 +24,10 @@ import urllib.parse
 
 from absl import logging
 import dataclasses_json
+import numpy as np
 import tensorstore as ts
+
+_HAS_DYNAMIC_ATTRIBUTES = True
 
 PathLike = Union[str, pathlib.PurePath]
 
@@ -32,6 +35,11 @@ T = TypeVar('T', bound=dataclasses_json.DataClassJsonMixin)
 
 # Local Alias
 Path = pathlib.Path
+
+dataclasses_json.cfg.global_config.encoders[Path] = str
+dataclasses_json.cfg.global_config.decoders[Path] = Path
+dataclasses_json.cfg.global_config.encoders[np.int64] = str
+dataclasses_json.cfg.global_config.decoders[np.int64] = np.int64
 
 
 def save_dataclass_json(
