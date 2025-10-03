@@ -82,13 +82,17 @@ class DescriptorTest(absltest.TestCase):
 
     self.assertIsInstance(desc, descriptor.VolumeDescriptor)
     self.assertListEqual(desc.decorator_specs, [])
+    tensorstore_config = desc.tensorstore_config
+    self.assertIsNotNone(tensorstore_config)
 
-    self.assertIsInstance(desc.tensorstore_config, tsv.TensorstoreConfig)
-    self.assertIsInstance(desc.tensorstore_config.spec, dict)
-    self.assertIsInstance(desc.tensorstore_config.metadata,
-                          tsv.TensorstoreMetadata)
-    self.assertListEqual(desc.tensorstore_config.metadata.bounding_boxes,
-                         [BBOX([0, 0, 0], [1000, 1000, 1000])])
+    self.assertIsInstance(tensorstore_config, tsv.TensorstoreConfig)
+    self.assertIsInstance(tensorstore_config.spec, dict)
+    metadata = tensorstore_config.metadata
+    self.assertIsNotNone(metadata)
+    self.assertIsInstance(metadata, tsv.TensorstoreMetadata)
+    self.assertListEqual(
+        metadata.bounding_boxes, [BBOX([0, 0, 0], [1000, 1000, 1000])]
+    )
 
   def test_volume_descriptor_with_ts_config_as_path(self):
     spec = {
