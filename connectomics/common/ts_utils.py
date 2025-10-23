@@ -20,9 +20,11 @@ from typing import Any, Mapping
 import tensorstore as ts
 
 
-def write_json(to_write: Mapping[str, Any],
-               kvstore: ts.KvStore.Spec,
-               context: ts.Context = None) -> Mapping[str, Any]:
+def write_json(
+    to_write: Mapping[str, Any],
+    kvstore: ts.KvStore.Spec | str | Mapping[str, Any],
+    context: ts.Context | None = None,
+) -> Mapping[str, Any]:
   """Write JSON data to parent dir of s0_tstore using TensorStore driver."""
   if context is None:
     context = ts.Context()
@@ -34,8 +36,10 @@ def write_json(to_write: Mapping[str, Any],
   return to_write
 
 
-def load_json(kvstore: ts.KvStore.Spec,
-              context: ts.Context = None) -> Mapping[str, Any]:
+def load_json(
+    kvstore: ts.KvStore.Spec | str | Mapping[str, Any],
+    context: ts.Context | None = None,
+) -> Mapping[str, Any]:
   """Load JSON data using TensorStore driver."""
   if context is None:
     context = ts.Context()

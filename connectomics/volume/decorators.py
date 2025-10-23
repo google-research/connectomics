@@ -24,7 +24,7 @@ import dataclasses
 import enum
 import json as json_lib
 import pprint
-from typing import Any, Iterable, Mapping, MutableMapping, Optional, Sequence, Union
+from typing import Any, Iterable, Mapping, MutableMapping, Optional, Sequence, Union, cast
 
 from absl import logging
 from connectomics.common import counters
@@ -851,7 +851,7 @@ class Interpolation(Decorator):
     if (any(new < old for new, old in zip(self._size, input_ts.shape))
         and self._backend == 'pad'):
       raise ValueError('Can only pad to increase size.')
-    inclusive_min = input_ts.schema.domain.inclusive_min
+    inclusive_min = input_ts.domain.inclusive_min
     if inclusive_min != tuple([0 for _ in range(input_ts.ndim)]):
       raise ValueError(
           'Only input TensorStores with `inclusive_min` all zeros are ' +
@@ -1148,7 +1148,7 @@ def _object_bounds_to_slices(
 
 def _object_slices_to_domains(
     object_slices: Sequence[Union[tuple[slice, ...], None]],
-    labels: list[str],
+    labels: Sequence[str],
     offset: int = 0,
 ) -> dict[int, ts.IndexDomain]:
   """Creates IndexDomains from object slices.
@@ -1295,7 +1295,8 @@ class ObjectsContext(Decorator):
 class Downsample(Decorator):
   """Downsamples input TensorStore."""
 
-  def __init__(self, downsample_factors: Sequence[int], method: str):
+  def __init__(self, downsample_factors: Sequence[int],
+               method: ts.DownsampleMethod):
     """Downsample TensorStore.
 
     Args:
@@ -1406,7 +1407,9 @@ class Write(Writer):
       raise AssertionError('Write.initialize must be called first.')
     materialize_log = metadata_utils.get_run_log()
     materialize_log['gin_operative_config'] = gin.operative_config_str()
-    log_kvstore = self._output_ts.kvstore.spec() / 'materialize_log.json'
+    kvs = self._output_ts.kvstore
+    assert kvs is not None
+    log_kvstore = kvs.spec() / 'materialize_log.json'
     yield materialize_log, log_kvstore
 
   def debug_string(self) -> str:
@@ -1448,7 +1451,9 @@ class MultiscaleWrite(Writer):
     self._output_base_spec = ts.Spec(
         _build_output_spec(input_schema_spec, decorated_ts,
                            self._output_base_spec_overrides, dryrun))
-    self._axes = self._output_base_spec.domain.labels
+    domain = self._output_base_spec.domain
+    assert domain is not None
+    self._axes = domain.labels
     if all(self._output_base_spec.dimension_units):
       self._dimension_units = self._output_base_spec.dimension_units
     elif all(ts.Spec(input_schema_spec).dimension_units):
@@ -1497,9 +1502,13 @@ class MultiscaleWrite(Writer):
         downsamplingFactors=self._downsampling_factors,
         axes=self._axes
     )
-    if self._dimension_units is not None:
-      ms_spec['units'] = [du.base_unit for du in self._dimension_units]
-      ms_spec['resolution'] = [du.multiplier for du in self._dimension_units]
+    if self._dimension_units is not None and all(self._dimension_units):
+      ms_spec['units'] = [
+          cast(ts.Unit, du).base_unit for du in self._dimension_units
+      ]
+      ms_spec['resolution'] = [
+          cast(ts.Unit, du).multiplier for du in self._dimension_units
+      ]
     return ms_spec
 
   def post_jsons(self) -> Iterable[tuple[JsonSpec, ts.KvStore.Spec]]:

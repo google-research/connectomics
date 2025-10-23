@@ -207,7 +207,10 @@ class TensorStorePath:
   @classmethod
   def from_tensorstore(cls, vol: ts.TensorStore) -> 'TensorStorePath':
     # TODO(timblakely): Support adapters when TensorStore does.
-    path = f'{vol.spec().kvstore.url}|{vol.spec().to_json()["driver"]}:'
+    spec = vol.spec()
+    kvs = spec.kvstore
+    assert kvs is not None
+    path = f'{kvs.url}|{spec.to_json()["driver"]}:'
     return cls(path)
 
   def __post_init__(self):

@@ -16,7 +16,7 @@
 
 import copy
 import dataclasses
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Union, cast
 
 from connectomics.common import array
 from connectomics.common import bounding_box
@@ -125,19 +125,21 @@ class TensorstoreVolume(base.Volume):
                    use_transaction=True):
     """Writes a subvolume of data based on a specified set of CZYX slices."""
 
-    def _write():
-      self._store[tuple(slices)].write(value).result()
+    def _write(txn: ts.Transaction | None):
+      self._store.with_transaction(txn)[tuple(slices)].write(value).result()
 
     if use_transaction:
-      with ts.Transaction():
-        _write()
+      with ts.Transaction() as txn:
+        _write(txn=txn)
     else:
-      _write()
+      _write(txn=None)
 
   @property
   def chunk_size(self) -> array.Tuple4i:
     """Backing chunk size in voxels, CZYX."""
-    return self._store.schema.chunk_layout.read_chunk.shape
+    chunk_size = self._store.schema.chunk_layout.read_chunk.shape
+    assert chunk_size is not None and all(chunk_size)
+    return cast(array.Tuple4i, chunk_size)
 
 
 class TensorstoreArrayVolume(TensorstoreVolume):
