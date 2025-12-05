@@ -84,8 +84,9 @@ class ComputePercentile(beam.core.DoFn):
                        dtype=self._dtype)
     def compute(t):
       start, end = get_window(t, self._radius, self._shape[3])
-      ptile = np.percentile(tile[:, start:end], self._percentiles,
-                            axis=1, interpolation="nearest").transpose()
+      ptile = np.percentile(
+          tile[:, start:end], self._percentiles, axis=1, method="nearest"
+      ).transpose()
       staging[:, t, :] = ptile
     with concurrent.futures.ThreadPoolExecutor(self._max_workers) as executor:
       _ = executor.map(compute, range(self._shape[3]))
