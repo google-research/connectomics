@@ -253,7 +253,7 @@ def minmax_params(params: PyTree) -> tuple[PyTree, PyTree]:
   return min_pars, max_pars
 
 
-def check_state(p_minmax: ..., params: PyTree, step: int):
+def check_state(p_minmax, params: PyTree, step: int):
   """Verifies that parameters are consistent between all workers."""
   min_state, max_state = p_minmax(params=params)
   if not jax.tree_util.tree_all(

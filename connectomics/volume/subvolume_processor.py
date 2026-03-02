@@ -52,7 +52,7 @@ class ProcessingConfig(dataclasses_json.DataClassJsonMixin):
   subvolume_size: list[int] | None = None
 
 
-def dataclass_configuration(cls: ...) -> Optional[Type]:  # pylint:disable=g-bare-generic
+def dataclass_configuration(cls) -> Optional[Type]:  # pylint:disable=g-bare-generic
   init_params = inspect.signature(cls.__init__).parameters
   if 'config' in init_params:
     # TODO(timblakely): Also check to see if the class is an actual dataclass.
