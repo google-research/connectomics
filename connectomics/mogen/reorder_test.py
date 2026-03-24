@@ -17,10 +17,10 @@ import jax.numpy as jnp
 import numpy as np
 
 from connectomics.mogen import reorder
-from google3.testing.pybase import googletest
+from absl.testing import absltest
 
 
-class ReorderTest(googletest.TestCase):
+class ReorderTest(absltest.TestCase):
 
   def test_reorder_named_z_recursive(self):
     key = jax.random.PRNGKey(0)
@@ -74,4 +74,4 @@ class ReorderTest(googletest.TestCase):
 
 
 if __name__ == '__main__':
-  googletest.main()
+  absltest.main()

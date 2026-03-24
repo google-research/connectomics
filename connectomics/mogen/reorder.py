@@ -22,7 +22,7 @@ import numpy as np
 import optax
 import ott_jax as ott
 
-from google3.research.neuromancer.jax import spatial
+from connectomics.jax import spatial
 
 
 @jax.jit
