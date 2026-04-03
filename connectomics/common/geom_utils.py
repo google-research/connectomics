@@ -132,17 +132,53 @@ def downsample_area(
   scale_zyx = scale[::-1]
   scale_vol = np.prod(scale)
 
+  sliced_svt = svt[off[2] :, off[1] :, off[0] :]
+
+  # Pad the SVT to handle remainder elements when the effective data size
+  # isn't a multiple of the scale. Edge-padding the SVT is equivalent to
+  # appending zero-valued data elements (since repeating the cumulative sum
+  # leaves the sums unchanged for the partial block).
+  effective_shape = np.array(sliced_svt.shape) - 1
+  remainder = effective_shape % scale_zyx
+  pad_amounts = np.where(remainder > 0, scale_zyx - remainder, 0)
+
+  if np.any(pad_amounts > 0):
+    sliced_svt = np.pad(
+        sliced_svt, [(0, p) for p in pad_amounts], mode='edge'
+    )
+
+    # Build a mask SVT that marks the padded positions so that partial
+    # blocks are averaged only over their real contributors.
+    padded_shape = tuple((effective_shape + pad_amounts).astype(int))
+    pad_mask = np.ones(padded_shape, dtype=np.int64)
+    pad_mask[: effective_shape[0],
+             : effective_shape[1],
+             : effective_shape[2]] = 0
+    pad_mask_svt = integral_image(pad_mask)
+
+    if mask_svt is not None:
+      sliced_mask = mask_svt[off[2] :, off[1] :, off[0] :]
+      sliced_mask = np.pad(
+          sliced_mask, [(0, p) for p in pad_amounts], mode='edge'
+      )
+      # Linearity of the integral image: the combined mask SVT is the sum
+      # of the edge-padded original mask SVT and the padding mask SVT.
+      mask_svt = sliced_mask + pad_mask_svt
+    else:
+      mask_svt = pad_mask_svt
+  else:
+    if mask_svt is not None:
+      mask_svt = mask_svt[off[2] :, off[1] :, off[0] :]
+
   # The value computed in ret below corresponds to an output cropped by
   # scale - 1 on each side prior to striding, but we need the output to
   # be cropped by the context expected by the processor.
-  ret = query_integral_image(
-      svt[off[2] :, off[1] :, off[0] :], diam=scale_zyx, stride=scale_zyx
-  )
+  ret = query_integral_image(sliced_svt, diam=scale_zyx, stride=scale_zyx)
   if mask_svt is None:
     ret = ret / scale_vol
   else:
     missing = query_integral_image(
-        mask_svt[off[2] :, off[1] :, off[0] :], diam=scale_zyx, stride=scale_zyx
+        mask_svt, diam=scale_zyx, stride=scale_zyx
     )
     norm = np.clip(scale_vol - missing, 1, None)
     ret = ret / norm
