@@ -109,7 +109,13 @@ def pca_align_single(
     points, feats after alignment
   """
 
-  centered = points - jnp.mean(points, axis=0)
+  orig_dtype = jnp.result_type(points)
+
+  # Eigendecomposition (eigh) requires float32 for numerical stability.
+  points_f32 = jnp.asarray(points, dtype=jnp.float32)
+  feats_f32 = jnp.asarray(feats, dtype=jnp.float32)
+
+  centered = points_f32 - jnp.mean(points_f32, axis=0)
   cov = jnp.dot(centered.T, centered)
   _, eigvecs = jnp.linalg.eigh(cov)
 
@@ -131,13 +137,15 @@ def pca_align_single(
   rot_mtx = rot_mtx * jnp.array([1.0, 1.0, jnp.sign(det)])
 
   # Apply rotation to the original points so that the origin is unchanged.
-  aligned = jnp.dot(points, rot_mtx)
+  aligned = jnp.dot(points_f32, rot_mtx).astype(orig_dtype)
 
-  feats_scalar = feats[:, num_vectors * 3 :]
-  feats_vec = feats[:, : num_vectors * 3].reshape(-1, num_vectors, 3)
+  feats_scalar = feats_f32[:, num_vectors * 3 :]
+  feats_vec = feats_f32[:, : num_vectors * 3].reshape(-1, num_vectors, 3)
   feats_vec = jnp.dot(feats_vec, rot_mtx).reshape(-1, num_vectors * 3)
 
-  aligned_feats = jnp.concatenate([feats_vec, feats_scalar], axis=-1)
+  aligned_feats = jnp.concatenate([feats_vec, feats_scalar], axis=-1).astype(
+      orig_dtype
+  )
   return aligned, aligned_feats
 
 
