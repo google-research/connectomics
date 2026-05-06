@@ -50,6 +50,7 @@ class SamplingTest(googletest.TestCase):
     np.testing.assert_array_equal(split.train_labels, [0, 0, 0, 0, 0, 0, 0])
     np.testing.assert_array_equal(split.valid_labels, [0])
     np.testing.assert_array_equal(split.test_labels, [0, 0])
+    self.assertEqual(split.signature(), '88ee1ace6993728df8a22cc06b66af78')
 
     # Results should be balanced by labels.
     labels = [1, 1, 1, 2, 2, 2, 2, 2, 2, 2]
@@ -61,6 +62,7 @@ class SamplingTest(googletest.TestCase):
     np.testing.assert_array_equal(split.train_labels, [1, 1, 2, 2, 2, 2])
     np.testing.assert_array_equal(split.valid_labels, [])
     np.testing.assert_array_equal(split.test_labels, [1, 2, 2, 2])
+    self.assertEqual(split.signature(), '87c60910913b7d38dec76fa54e1c5fb4')
 
   def test_upsample(self):
     sample_ids = range(10)
@@ -69,23 +71,20 @@ class SamplingTest(googletest.TestCase):
     train_ratio = 0.7
     valid_ratio = 0.1  # Test 0.2 implicit.
     split = sampling.split_dataset(
-        sample_ids, seed, train_ratio, valid_ratio, labels
-    )
+        sample_ids, seed, train_ratio, valid_ratio, labels)
     upsampled = split.upsampled(upsample_factor=2, dataset_len=10)
     np.testing.assert_array_equal(
-        upsampled.train_ids, [2, 0, 7, 4, 6, 8, 12, 10, 17, 14, 16, 18]
-    )
+        upsampled.train_ids, [2, 0, 7, 4, 6, 8, 12, 10, 17, 14, 16, 18])
     np.testing.assert_array_equal(upsampled.valid_ids, [])
     np.testing.assert_array_equal(
-        upsampled.test_ids, [1, 9, 3, 5, 11, 19, 13, 15]
-    )
+        upsampled.test_ids, [1, 9, 3, 5, 11, 19, 13, 15])
     np.testing.assert_array_equal(
-        upsampled.train_labels, [1, 1, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2]
-    )
+        upsampled.train_labels, [1, 1, 2, 2, 2, 2, 1, 1, 2, 2, 2, 2])
     np.testing.assert_array_equal(upsampled.valid_labels, [])
     np.testing.assert_array_equal(
-        upsampled.test_labels, [1, 2, 2, 2, 1, 2, 2, 2]
-    )
+        upsampled.test_labels, [1, 2, 2, 2, 1, 2, 2, 2])
+    self.assertEqual(split.signature(), '87c60910913b7d38dec76fa54e1c5fb4')
+    self.assertEqual(upsampled.signature(), '908d475f93c4b560db49d1699967b417')
 
   def test_concatenate_splits(self):
     sample_ids = range(10)
@@ -96,19 +95,16 @@ class SamplingTest(googletest.TestCase):
 
     labels = [1, 1, 1, 2, 2, 2, 2, 2, 2, 2]
     split2 = sampling.split_dataset(
-        sample_ids, seed, train_ratio, valid_ratio, labels
-    )
+        sample_ids, seed, train_ratio, valid_ratio, labels)
 
     dataset_lengths = [10, 10]
     concat = sampling.concatenate_splits([split, split2], dataset_lengths)
     np.testing.assert_array_equal(
-        concat.train_ids, [3, 5, 9, 4, 6, 7, 0, 12, 10, 17, 14, 16, 18]
-    )
+        concat.train_ids, [3, 5, 9, 4, 6, 7, 0, 12, 10, 17, 14, 16, 18])
     np.testing.assert_array_equal(concat.valid_ids, [8])
     np.testing.assert_array_equal(concat.test_ids, [2, 1, 11, 19, 13, 15])
     np.testing.assert_array_equal(
-        concat.train_labels, [0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2]
-    )
+        concat.train_labels, [0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2])
     np.testing.assert_array_equal(concat.valid_labels, [0])
     np.testing.assert_array_equal(concat.test_labels, [0, 0, 1, 2, 2, 2])
 
@@ -116,8 +112,11 @@ class SamplingTest(googletest.TestCase):
     sample_ids = range(10)
     seed = 22222
     num_splits = 5
-    splits = sampling.cross_validation_split_dataset(
-        sample_ids, seed, num_splits).sample_id_splits
+    cvsplit = sampling.cross_validation_split_dataset(
+        sample_ids, seed, num_splits)
+    self.assertEqual(cvsplit.signature(), 'a190983b16862e71d652569cf03c0c52')
+
+    splits = cvsplit.sample_id_splits
     np.testing.assert_array_equal(splits[0], [3, 5])
     np.testing.assert_array_equal(splits[1], [9, 4])
     np.testing.assert_array_equal(splits[2], [6, 7])
@@ -131,5 +130,5 @@ class SamplingTest(googletest.TestCase):
     np.testing.assert_array_equal(splits[1], [7, 0, 8, 2, 1])
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
   googletest.main()

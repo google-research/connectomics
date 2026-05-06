@@ -16,14 +16,31 @@
 
 from collections.abc import Sequence
 import dataclasses
+import hashlib
 from typing import Self
 import numpy as np
 
 
 @dataclasses.dataclass
 class DatasetMultiSplit:
+  """Represents N-way splits, usually equal as used for cross-validations."""
   sample_id_splits: list[np.ndarray]
   label_splits: list[np.ndarray]
+
+  def __str__(self):
+    sample_id_split_lens = [len(s) for s in self.sample_id_splits]
+    label_split_lens = [len(s) for s in self.label_splits]
+    return (
+        f'DatasetMultiSplit(sample_id_splits={sample_id_split_lens}, '
+        f'label_splits={label_split_lens}, signature={self.signature()})')
+
+  def signature(self):
+    md5 = hashlib.md5()
+    for s in self.sample_id_splits:
+      md5.update(s.tobytes())
+    for s in self.label_splits:
+      md5.update(s.tobytes())
+    return md5.hexdigest()
 
 
 @dataclasses.dataclass
@@ -35,6 +52,25 @@ class DatasetSplit:
   train_labels: np.ndarray
   valid_labels: np.ndarray
   test_labels: np.ndarray
+
+  def __str__(self):
+    return (
+        f'DatasetSplit(train_ids={len(self.train_ids)}, '
+        f'valid_ids={len(self.valid_ids)}, test_ids={len(self.test_ids)}, '
+        f'train_labels={len(self.train_labels)}, '
+        f'valid_labels={len(self.valid_labels)}, '
+        f'test_labels={len(self.test_labels)}, '
+        f'signature={self.signature()})')
+
+  def signature(self):
+    md5 = hashlib.md5()
+    md5.update(self.train_ids.tobytes())
+    md5.update(self.test_ids.tobytes())
+    md5.update(self.valid_ids.tobytes())
+    md5.update(self.train_labels.tobytes())
+    md5.update(self.test_labels.tobytes())
+    md5.update(self.valid_labels.tobytes())
+    return md5.hexdigest()
 
   def upsampled(self, upsample_factor: int, dataset_len: int) -> Self:
     train_ids, valid_ids, test_ids = [], [], []
@@ -120,7 +156,7 @@ def split_dataset_by_ratios(
     seed: random seed
     ratios: The ratios of the splits. A final implicit split will be included,
       so e.g. passing ratios=[0.8, 0.1] will result in an 80/10/10 percent
-      split. (If ratios adds up to >=1 then the trailing splits will be empty.)
+      split. (If ratios adds up to >= 1 then the trailing splits will be empty.)
     labels: A label array of the same length as sample_ids. When passed, the
       samples for each label are distributed among the splits according to their
       ratios.
@@ -129,11 +165,11 @@ def split_dataset_by_ratios(
     DatasetMultiSplit
   """
   if len(np.unique(sample_ids)) != len(sample_ids):
-    raise ValueError("Found repeated sample ids")
+    raise ValueError('Found repeated sample ids')
 
   if labels is not None:
     if len(labels) != len(sample_ids):
-      raise ValueError("labels must be of the same length as sample_ids")
+      raise ValueError('labels must be of the same length as sample_ids')
     labels = np.array(labels, dtype=int)
   else:
     labels = np.zeros(len(sample_ids), dtype=int)
@@ -172,8 +208,8 @@ def split_dataset(
   """
   if train_ratio + valid_ratio > 1:
     raise ValueError(
-        "train_ratio and valid_ratio must be <= 1: "
-        f"{train_ratio}, {valid_ratio}"
+        'train_ratio and valid_ratio must be <= 1: '
+        f'{train_ratio}, {valid_ratio}'
     )
   ratios = train_ratio, valid_ratio
   split = split_dataset_by_ratios(sample_ids, seed, ratios, labels)
