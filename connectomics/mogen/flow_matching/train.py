@@ -22,6 +22,9 @@ from clu import metric_writers
 from connectomics.mogen.flow_matching import utils
 from e3x.so3 import rotations
 from etils import epath
+
+# from google3.research.neuromancer.segmentation.ffn import storage
+from ffn.inference import storage
 import grain.tensorflow as grain
 import jax
 from jax import sharding
@@ -33,8 +36,6 @@ import optax
 import orbax.checkpoint as ocp
 import tensorflow as tf
 import tqdm
-
-from ffn.inference import storage
 
 def _random_batch(batch_size, n_points, n_feat, rng):
   """Generates a random batch of point cloud data."""
@@ -80,6 +81,7 @@ def _get_fake_dataloaders(
       None,
   )
 
+
 def train_flow_matching(
     config: ml_collections.ConfigDict, log_dir: str
 ) -> None | jax.Array:
@@ -95,6 +97,8 @@ def train_flow_matching(
   workdir = epath.Path(config.workdir) / f'{config.name_str}/'
   log_dir = epath.Path(log_dir) / f'{config.name_str}/'
   logging.info('workdir: %s, log_dir: %s', workdir, log_dir)
+  logging.info('JAX version: %s', jax.__version__)
+  logging.info('JAXlib version: %s', jax.lib.__version__)
 
   workdir.mkdir(parents=True, exist_ok=True)
   writer = metric_writers.create_default_writer(
@@ -160,7 +164,8 @@ def train_flow_matching(
 
   if jax.process_index() == 0:
     with storage.atomic_file(
-        str(workdir / 'init_data.npz'), 'wb'
+        str(workdir / 'init_data.npz'),
+        'wb',  # local=False
     ) as f:
       save_dict = {'coord': np.asarray(init_coord)}
       if config.use_feat and init_feat is not None:
@@ -184,6 +189,11 @@ def train_flow_matching(
       else None,
       n_combine_samples=config.n_combine_samples,
   )
+  if config.get('use_bf16', False):
+    params = jax.tree_util.tree_map(
+        lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,
+        params,
+    )
   optimizer = utils.get_optimizer(config)(
       learning_rate=config.lr, weight_decay=config.wd
   )
@@ -205,7 +215,8 @@ def train_flow_matching(
 
   if jax.process_index() == 0:
     with storage.atomic_file(
-        str(workdir / 'init_coord.html'), 'w'
+        str(workdir / 'init_coord.html'),
+        'w',  # local=False
     ) as f:
       utils.plot_point_clouds(
           init_coord[:16], n_combine_samples=config.n_combine_samples
@@ -214,17 +225,25 @@ def train_flow_matching(
   latest_checkpoint_manager = ocp.CheckpointManager(
       directory=workdir / 'checkpoints',
       checkpointers={
-          'train_state': ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
+          'train_state': ocp.AsyncCheckpointer(
+              ocp.PyTreeCheckpointHandler(use_ocdbt=True, use_zarr3=True)
+          ),
           'train_iter': ocp.Checkpointer(grain.OrbaxCheckpointHandler()),  # pytype:disable=wrong-arg-types
       },
-      options=ocp.CheckpointManagerOptions(max_to_keep=3),
+      options=ocp.CheckpointManagerOptions(
+          max_to_keep=3, cleanup_tmp_directories=True
+      ),
   )  # to restore after preemption
   best_checkpoint_manager = ocp.CheckpointManager(
       directory=workdir / 'best_checkpoints',
       checkpointers={
-          'train_state': ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
+          'train_state': ocp.AsyncCheckpointer(
+              ocp.PyTreeCheckpointHandler(use_ocdbt=True, use_zarr3=True)
+          ),
       },
-      options=ocp.CheckpointManagerOptions(max_to_keep=3),
+      options=ocp.CheckpointManagerOptions(
+          max_to_keep=3, cleanup_tmp_directories=True
+      ),
   )  # for inference, workaround: https://github.com/google/orbax/issues/526
 
   if latest_checkpoint_manager.latest_step():
@@ -233,6 +252,16 @@ def train_flow_matching(
         items={'train_state': state, 'train_iter': train_iter},
     )
     state = restored_data['train_state']
+    if config.get('use_bf16', False):
+      params = jax.tree_util.tree_map(
+          lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,
+          state.params,
+      )
+      ema_params = jax.tree_util.tree_map(
+          lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,
+          state.ema_params,
+      )
+      state = state.replace(params=params, ema_params=ema_params)
     train_iter = restored_data['train_iter']
     logging.info(
         'Restored checkpoint for step %d',
@@ -325,6 +354,7 @@ def train_flow_matching(
   running_train_step = 0
   running_train_loss = 0.0
   running_train_loss_squared = 0.0  # For variance calculation
+  running_aux_loss = 0.0
   log_dict = {
       'sum': collections.defaultdict(float),
       'count': collections.defaultdict(int),
@@ -334,17 +364,42 @@ def train_flow_matching(
     """Performs a single training step."""
     update_rng = jax.random.fold_in(train_rng, state.step)
 
+    if config.dynamic_batch_freq > 0:
+      is_regular_step = state.step % config.dynamic_batch_freq == 0
+
+      if is_regular_step:
+        global_batch_size = config.batch_size * config.num_devices
+        cur_batch = jax.tree.map(
+            lambda x: x[:global_batch_size] if x is not None else None, batch
+        )
+        cur_n_points = config.n_points
+      else:
+        cur_batch = batch
+        cur_n_points = config.small_n_points
+    else:
+      cur_batch = batch
+      cur_n_points = config.n_points
+
     coord, feat, cond = utils.prep_data(
-        batch,
+        cur_batch,
         config.coord_scale,
         config.feat_scale,
-        config.n_points // config.n_combine_samples,
+        cur_n_points // config.n_combine_samples,
         n_combine_samples=config.n_combine_samples,
         use_feat=config.use_feat,
         cond_mode=config.cond_mode,
         dst_index_cond=config.train_set == 'mixed',
         add_dummy_cond=len(config.initial_checkpoint_path) > 0,  # pylint: disable=g-explicit-length-test
     )
+
+    if config.get('use_bf16', False):
+      coord = coord.astype(jnp.bfloat16)
+      if feat is not None:
+        feat = feat.astype(jnp.bfloat16)
+
+    class_labels = cur_batch.get('_dataset_index', None)
+    if config.train_set == 'pos_neg' and class_labels is not None:
+      class_labels = jnp.where(class_labels < 2, 0, 1)
 
     return utils.update_state(
         model=model,
@@ -359,9 +414,15 @@ def train_flow_matching(
         point_cond=config.point_cond,
         do_ott=config.do_ott,
         reorder_type=config.reorder_type,
+        class_labels=class_labels,
+        use_class_noise=config.get('use_class_noise', False),
         reorder_noise_strength=config.reorder_noise_strength,
         point_cond_sample_threshold=config.point_cond_sample_threshold,
         feat_cond_dropout_threshold=config.feat_cond_dropout_threshold,
+        lambda_cfm=config.get('lambda_cfm', 0.0),
+        lambda_cond=config.get('lambda_cond', 0.0),
+        use_mst=config.get('use_mst', False),
+        use_bf16=config.get('use_bf16', False),
     )
 
   p_train_step = jax.jit(
@@ -391,6 +452,11 @@ def train_flow_matching(
         add_dummy_cond=len(config.initial_checkpoint_path) > 0,  # pylint: disable=g-explicit-length-test
     )
 
+    if config.get('use_bf16', False):
+      coord = coord.astype(jnp.bfloat16)
+      if feat is not None:
+        feat = feat.astype(jnp.bfloat16)
+
     variables = {'params': state.ema_params}
     if state.batch_stats:
       variables['batch_stats'] = state.batch_stats
@@ -409,6 +475,9 @@ def train_flow_matching(
         reorder_noise_strength=config.reorder_noise_strength,
         point_cond_sample_threshold=config.point_cond_sample_threshold,
         feat_cond_dropout_threshold=config.feat_cond_dropout_threshold,
+        lambda_cfm=config.get('lambda_cfm', 0.0),
+        lambda_cond=config.get('lambda_cond', 0.0),
+        use_mst=config.get('use_mst', False),
     )[0]
 
   p_val_step = jax.jit(
@@ -421,7 +490,16 @@ def train_flow_matching(
       out_shardings=replicate_sharding,  # loss
   )
 
-  def generate(state, rng, cond, noise, point_cond_mask, guidance_scale, guide):
+  def generate(
+      state,
+      rng,
+      cond,
+      noise,
+      point_cond_mask,
+      guidance_scale,
+      guide,
+      class_labels=None,
+  ):
     """Generates samples from the model."""
     sample_shape = (init_coord.shape[1], init_coord.shape[-1] + feat_shape)
     return utils.generate_samples(
@@ -437,6 +515,8 @@ def train_flow_matching(
         point_cond_mask=point_cond_mask,
         guidance_scale=guidance_scale,
         guide=guide,
+        use_class_noise=config.get('use_class_noise', False),
+        class_labels=class_labels,
     )
 
   p_generate = jax.jit(
@@ -448,10 +528,14 @@ def train_flow_matching(
           batch_sharding,  # noise
           batch_sharding,  # point_cond_mask
           batch_sharding,  # guidance_scale
+          batch_sharding,  # class_labels
       ),
       out_shardings=batch_sharding,  # samples
       static_argnames=('guide',),
   )
+
+  running_class_1_sum = 0.0
+  running_total_count = 0.0
 
   while jax.device_get(state.step) < config.max_steps:
     batch = next(train_iter)
@@ -465,11 +549,19 @@ def train_flow_matching(
     }
     assert ((-1 < batch['coord']) & (batch['coord'] < 1)).mean() > 0.9
 
+    if batch['_dataset_index'] is not None:
+      class_labels = batch['_dataset_index']
+      if config.train_set == 'pos_neg':
+        class_labels = np.where(class_labels < 2, 0, 1)
+      running_class_1_sum += float(np.sum(class_labels))
+      running_total_count += int(class_labels.shape[0])
+
     batch = jax.tree.map(jnp.array, batch)
     state, aux = p_train_step(state, batch)
     utils.log_bins(log_dict, aux)
     running_train_loss += aux['loss']
     running_train_loss_squared += aux['loss'] ** 2
+    running_aux_loss += aux.get('aux_loss', 0.0)
     running_train_step += 1
 
     step = int(jax.device_get(state.step))
@@ -484,16 +576,25 @@ def train_flow_matching(
       train_loss_variance = (
           running_train_loss_squared / running_train_step - train_loss**2
       )
+      class_ratio = (
+          running_class_1_sum / running_total_count
+          if running_total_count > 0
+          else 0.5
+      )
       if jax.process_index() == 0:
         logging.info(
-            'Step: %d, Train Loss: %.5f, Train Loss Variance: %.5f, Time:'
-            ' %.2fs',
+            'Step: %d, Train Loss: %.5f, Train Loss Variance: %.5f, Class'
+            ' Ratio: %.5f, Time: %.2fs',
             step,
             train_loss,
             train_loss_variance,
+            class_ratio,
             time.time() - train_start_time,
         )
       writer.write_scalars(step * global_batch_size, {'train_loss': train_loss})
+      writer.write_scalars(
+          step * global_batch_size, {'class_ratio': class_ratio}
+      )
       writer.write_scalars(
           step * global_batch_size,
           {'train_loss_variance': train_loss_variance},
@@ -501,17 +602,22 @@ def train_flow_matching(
       writer.write_scalars(
           step * global_batch_size, utils.log_dict_to_scalars(log_dict)
       )
+      writer.write_scalars(
+          step * global_batch_size,
+          {'aux_loss': running_aux_loss / running_train_step},
+      )
 
       latest_checkpoint_manager.save(
           step,
           items={
-              'train_state': jax.tree.map(np.array, state),
+              'train_state': state,
               'train_iter': train_iter,
           },
       )
 
       running_train_loss = 0.0
       running_train_loss_squared = 0.0
+      running_aux_loss = 0.0
       running_train_step = 0
       log_dict = {
           'sum': collections.defaultdict(float),
@@ -578,6 +684,26 @@ def train_flow_matching(
         )[: config.num_devices]
       else:
         point_cond_mask = None
+
+      if config.train_set == 'pos_neg':
+        n_samples_to_gen = 1024
+        class_labels_all = jnp.concatenate(
+            [jnp.zeros(512, dtype=jnp.int32), jnp.ones(512, dtype=jnp.int32)]
+        )
+        n_gen_chunks = n_samples_to_gen // config.num_devices
+      else:
+        n_samples_to_gen = config.n_samples
+        ratio = (
+            running_class_1_sum / running_total_count
+            if running_total_count > 0
+            else 0.5
+        )
+        rng_gen, generation_rng = jax.random.split(generation_rng)
+        n_gen_chunks = max(1, n_samples_to_gen // config.num_devices)
+        class_labels_all = jax.random.bernoulli(
+            rng_gen, ratio, (n_gen_chunks * config.num_devices,)
+        ).astype(jnp.int32)
+
       x_gen_full = jnp.concatenate(
           [
               p_generate(
@@ -588,18 +714,21 @@ def train_flow_matching(
                   point_cond_mask,
                   None,  # guidance_scale
                   False,  # guide
+                  class_labels_all[
+                      i * config.num_devices : (i + 1) * config.num_devices
+                  ],
               )
-              for i in range(max(1, config.n_samples // config.num_devices))
+              for i in range(n_gen_chunks)
           ],
           axis=0,
-      )[: config.n_samples]
+      )[:n_samples_to_gen]
       x_gen = x_gen_full[:, :, :3] / config.coord_scale
       if config.use_feat:
         x_feat_gen = x_gen_full[:, :, 3:] / config.feat_scale
       else:
         x_feat_gen = None
 
-      assert x_gen.shape[0] == config.n_samples
+      assert x_gen.shape[0] == n_samples_to_gen
       if not config.do_rotate:
         # training without rotation, rotate here to get same eval statistics
         x_gen = x_gen @ rotations.random_rotation(
@@ -617,7 +746,8 @@ def train_flow_matching(
         x_feat_gen_gathered = None
       if jax.process_index() == 0:
         with storage.atomic_file(
-            str(workdir / 'x_gen.html'), 'w'
+            str(workdir / 'x_gen.html'),
+            'w',  # local=False
         ) as f:
           utils.plot_point_clouds(
               x_gen_gathered[: utils.N_PLOT],
@@ -631,10 +761,37 @@ def train_flow_matching(
       assert len(x_gen.shape) == 3  # batch, n_points, 3
       multihost_utils.process_allgather(jax.numpy.array(0))
       logging.debug('debug: Completed all-gather barrier.')
-      metrics_results = utils.compute_metrics(
-          x_gen_gathered,
-          config,
-      )
+      if config.train_set == 'pos_neg':
+        config_pos = ml_collections.ConfigDict(config)
+        config_pos.train_set = 'train'
+        config_neg = ml_collections.ConfigDict(config)
+        config_neg.train_set = 'axons_negative'
+
+        metrics_pos = utils.compute_metrics(x_gen_gathered[:512], config_pos)
+        metrics_neg = utils.compute_metrics(x_gen_gathered[512:], config_neg)
+
+        s_mmd_train_pos = metrics_pos[0]
+        s_mmd_train_neg = metrics_neg[0]
+
+        writer.write_scalars(
+            step * global_batch_size,
+            {
+                's_mmd_train_pos': s_mmd_train_pos,
+                's_mmd_train_neg': s_mmd_train_neg,
+            },
+        )
+
+        # Average for main metrics used in early stopping and logging
+        metrics_results = (
+            (metrics_pos[0] + metrics_neg[0]) / 2.0,
+            (metrics_pos[1] + metrics_neg[1]) / 2.0,
+            (metrics_pos[2] + metrics_neg[2]) / 2.0,
+            (metrics_pos[3] + metrics_neg[3]) / 2.0,
+            (metrics_pos[4] + metrics_neg[4]) / 2.0,
+            (metrics_pos[5] + metrics_neg[5]) / 2.0,
+        )
+      else:
+        metrics_results = utils.compute_metrics(x_gen_gathered, config)
 
       (
           s_mmd_train,
@@ -646,7 +803,7 @@ def train_flow_matching(
       ) = metrics_results
 
       logging.info(
-          'computed metrics, s_mmd_train: %r, s_mmd_val: %r',
+          'computed metrics, s_mmd_train: %r, s_mmd_val_mst: %r',
           s_mmd_train,
           s_mmd_val,
       )
@@ -658,6 +815,7 @@ def train_flow_matching(
           with storage.atomic_file(
               str(workdir / 'best_s_mmd_train.npz'),
               'wb',
+              #   local=False,
           ) as f:
             save_dict = {'coord': np.asarray(x_gen_gathered)}
             if config.use_feat and x_feat_gen_gathered is not None:
@@ -665,7 +823,8 @@ def train_flow_matching(
             np.savez_compressed(f, **save_dict)
 
           with storage.atomic_file(
-              str(workdir / 'best_s_mmd_train.html'), 'w'
+              str(workdir / 'best_s_mmd_train.html'),
+              'w',  # local=False
           ) as f:
             utils.plot_point_clouds(
                 x_gen_gathered[: utils.N_PLOT],
@@ -698,25 +857,25 @@ def train_flow_matching(
         best_checkpoint_manager.save(
             step,
             items={
-                'train_state': jax.tree.map(np.array, state),
+                'train_state': state,
             },
         )
 
       writer.write_scalars(
           step * global_batch_size,
           {
-              'mmd_train': mmd_train,
-              'mmd_val': mmd_val,
-              'fid_train': fid_train,
-              'fid_val': fid_val,
-              's_mmd_train': s_mmd_train_sub,
-              's_mmd_val': s_mmd_val_sub,
-              's_fid_train': s_fid_train,
-              's_fid_val': s_fid_val,
-              's_mmd_train_mst': s_mmd_train,
-              's_mmd_val_mst': s_mmd_val,
-              'generation_time': metrics_start_time - generation_start_time,
-              'metrics_time': time.time() - metrics_start_time,
+              'mmd_train': float(mmd_train),
+              'mmd_val': float(mmd_val),
+              'fid_train': float(fid_train),
+              'fid_val': float(fid_val),
+              's_mmd_train': float(s_mmd_train_sub),
+              's_mmd_val': float(s_mmd_val_sub),
+              's_fid_train': float(s_fid_train),
+              's_fid_val': float(s_fid_val),
+              's_mmd_train_mst': float(s_mmd_train),
+              's_mmd_val_mst': float(s_mmd_val),
+              'generation_time': float(metrics_start_time - generation_start_time),
+              'metrics_time': float(time.time() - metrics_start_time),
           },
       )
       logging.info(
