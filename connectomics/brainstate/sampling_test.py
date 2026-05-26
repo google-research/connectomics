@@ -112,22 +112,24 @@ class SamplingTest(googletest.TestCase):
     sample_ids = range(10)
     seed = 22222
     num_splits = 5
-    cvsplit = sampling.cross_validation_split_dataset(
-        sample_ids, seed, num_splits)
-    self.assertEqual(cvsplit.signature(), 'a190983b16862e71d652569cf03c0c52')
+    cvsplits = sampling.cross_validation_split_dataset(
+        sample_ids, seed, num_splits, num_splits_for_valid=1,
+        num_splits_for_test=0)
+    self.assertLen(cvsplits, 5)
+    np.testing.assert_array_equal(cvsplits[0].valid_ids, [3, 5])
+    np.testing.assert_array_equal(cvsplits[1].valid_ids, [9, 4])
+    np.testing.assert_array_equal(cvsplits[2].valid_ids, [6, 7])
+    np.testing.assert_array_equal(cvsplits[3].valid_ids, [0, 8])
+    np.testing.assert_array_equal(cvsplits[4].valid_ids, [2, 1])
 
-    splits = cvsplit.sample_id_splits
-    np.testing.assert_array_equal(splits[0], [3, 5])
-    np.testing.assert_array_equal(splits[1], [9, 4])
-    np.testing.assert_array_equal(splits[2], [6, 7])
-    np.testing.assert_array_equal(splits[3], [0, 8])
-    np.testing.assert_array_equal(splits[4], [2, 1])
-
-    num_splits = 2
-    splits = sampling.cross_validation_split_dataset(
-        sample_ids, seed, num_splits).sample_id_splits
-    np.testing.assert_array_equal(splits[0], [3, 5, 9, 4, 6])
-    np.testing.assert_array_equal(splits[1], [7, 0, 8, 2, 1])
+    num_splits = 10
+    cvsplits = sampling.cross_validation_split_dataset(
+        sample_ids, seed, num_splits, num_splits_for_valid=2,
+        num_splits_for_test=1)
+    self.assertLen(cvsplits, 10)
+    np.testing.assert_array_equal(cvsplits[0].train_ids, [4, 6, 7, 0, 8, 2, 1])
+    np.testing.assert_array_equal(cvsplits[0].valid_ids, [3, 5])
+    np.testing.assert_array_equal(cvsplits[0].test_ids, [9])
 
 
 if __name__ == '__main__':

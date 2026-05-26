@@ -223,9 +223,14 @@ def split_dataset(
   )
 
 
+def _concat(to_concat):
+  return np.concatenate(to_concat) if to_concat else np.array([])
+
+
 def cross_validation_split_dataset(
     sample_ids: Sequence[int], seed: int, num_splits: int,
-    labels: Sequence[int] | None = None) -> DatasetMultiSplit:
+    labels: Sequence[int] | None = None, num_splits_for_valid: int = 1,
+    num_splits_for_test: int = 1) -> list[DatasetSplit]:
   """Splits dataset into num_splits, optionally balanced by labels.
 
   Args:
@@ -235,9 +240,43 @@ def cross_validation_split_dataset(
     labels: Optional label array of the same length as sample_ids. When passed,
       the samples for each label are distributed among the splits according to
       their ratios.
+    num_splits_for_valid: How many split buckets to assign to validation set.
+      Remaining buckets not assigned to validation or test become train set.
+    num_splits_for_test: How many split buckets to assign to test set.
 
   Returns:
-    DatasetMultiSplit
+    list[DatasetSplit] where each split has the indicated proportions.
   """
+  assert num_splits_for_valid + num_splits_for_test < num_splits
   ratios = [1.0 / num_splits] * (num_splits - 1)
-  return split_dataset_by_ratios(sample_ids, seed, ratios, labels)
+  equal_splits = split_dataset_by_ratios(sample_ids, seed, ratios, labels)
+
+  # Initialize.
+  valid_splits = np.arange(0, num_splits_for_valid)
+  test_splits = np.arange(0, num_splits_for_test) + num_splits_for_valid
+  train_splits = np.arange(
+      num_splits_for_valid + num_splits_for_test, num_splits)
+  # Build DatasetSplits.
+  dataset_splits = []
+  for _ in range(num_splits):
+    dataset_splits.append(
+        DatasetSplit(
+            train_ids=_concat(
+                [equal_splits.sample_id_splits[s] for s in train_splits]),
+            valid_ids=_concat(
+                [equal_splits.sample_id_splits[s] for s in valid_splits]),
+            test_ids=_concat(
+                [equal_splits.sample_id_splits[s] for s in test_splits]),
+            train_labels=_concat(
+                [equal_splits.label_splits[s] for s in train_splits]),
+            valid_labels=_concat(
+                [equal_splits.label_splits[s] for s in valid_splits]),
+            test_labels=_concat(
+                [equal_splits.label_splits[s] for s in test_splits]),
+        ))
+
+    # Rotate.
+    valid_splits = (valid_splits + 1) % num_splits
+    test_splits = (test_splits + 1) % num_splits
+    train_splits = (train_splits + 1) % num_splits
+  return dataset_splits
