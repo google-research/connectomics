@@ -34,8 +34,8 @@ import orbax.checkpoint as ocp
 import tensorflow as tf
 import tqdm
 
+#from google3.research.neuromancer.segmentation.ffn import storage
 from ffn.inference import storage
-
 def _random_batch(batch_size, n_points, n_feat, rng):
   """Generates a random batch of point cloud data."""
   coord = rng.standard_normal((batch_size, n_points, 3)).astype(np.float32)
@@ -95,6 +95,8 @@ def train_flow_matching(
   workdir = epath.Path(config.workdir) / f'{config.name_str}/'
   log_dir = epath.Path(log_dir) / f'{config.name_str}/'
   logging.info('workdir: %s, log_dir: %s', workdir, log_dir)
+  logging.info(f"JAX version: {jax.__version__}")
+  logging.info(f"JAXlib version: {jax.lib.__version__}")
 
   workdir.mkdir(parents=True, exist_ok=True)
   writer = metric_writers.create_default_writer(
@@ -160,7 +162,7 @@ def train_flow_matching(
 
   if jax.process_index() == 0:
     with storage.atomic_file(
-        str(workdir / 'init_data.npz'), 'wb'
+        str(workdir / 'init_data.npz'), 'wb', #local=False
     ) as f:
       save_dict = {'coord': np.asarray(init_coord)}
       if config.use_feat and init_feat is not None:
@@ -205,7 +207,7 @@ def train_flow_matching(
 
   if jax.process_index() == 0:
     with storage.atomic_file(
-        str(workdir / 'init_coord.html'), 'w'
+        str(workdir / 'init_coord.html'), 'w',# local=False
     ) as f:
       utils.plot_point_clouds(
           init_coord[:16], n_combine_samples=config.n_combine_samples
@@ -214,17 +216,17 @@ def train_flow_matching(
   latest_checkpoint_manager = ocp.CheckpointManager(
       directory=workdir / 'checkpoints',
       checkpointers={
-          'train_state': ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
+          'train_state': ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler(use_ocdbt=True, use_zarr3=True)),
           'train_iter': ocp.Checkpointer(grain.OrbaxCheckpointHandler()),  # pytype:disable=wrong-arg-types
       },
-      options=ocp.CheckpointManagerOptions(max_to_keep=3),
+      options=ocp.CheckpointManagerOptions(max_to_keep=3, cleanup_tmp_directories=True),
   )  # to restore after preemption
   best_checkpoint_manager = ocp.CheckpointManager(
       directory=workdir / 'best_checkpoints',
       checkpointers={
-          'train_state': ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
+          'train_state': ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler(use_ocdbt=True, use_zarr3=True)),
       },
-      options=ocp.CheckpointManagerOptions(max_to_keep=3),
+      options=ocp.CheckpointManagerOptions(max_to_keep=3, cleanup_tmp_directories=True),
   )  # for inference, workaround: https://github.com/google/orbax/issues/526
 
   if latest_checkpoint_manager.latest_step():
@@ -313,6 +315,8 @@ def train_flow_matching(
     writer.write_texts(0, {'config': str(config)})  # for easier matching
     # TODO(riegerfr): also log cl/commit number+ timestamp from xmanager
 
+
+
   mesh = sharding.Mesh(np.array(jax.devices()), ('batch',))
   batch_sharding = sharding.NamedSharding(mesh, sharding.PartitionSpec('batch'))
   replicate_sharding = sharding.NamedSharding(mesh, sharding.PartitionSpec())
@@ -325,6 +329,7 @@ def train_flow_matching(
   running_train_step = 0
   running_train_loss = 0.0
   running_train_loss_squared = 0.0  # For variance calculation
+  running_aux_loss = 0.0
   log_dict = {
       'sum': collections.defaultdict(float),
       'count': collections.defaultdict(int),
@@ -334,17 +339,36 @@ def train_flow_matching(
     """Performs a single training step."""
     update_rng = jax.random.fold_in(train_rng, state.step)
 
+    if config.dynamic_batch_freq > 0:
+      is_regular_step = (state.step % config.dynamic_batch_freq == 0)
+      
+      if is_regular_step:
+        global_batch_size = config.batch_size * config.num_devices
+        cur_batch = jax.tree.map(lambda x: x[:global_batch_size] if x is not None else None, batch)
+        cur_n_points = config.n_points
+      else:
+        cur_batch = batch
+        cur_n_points = config.small_n_points
+    else:
+      cur_batch = batch
+      cur_n_points = config.n_points
+
     coord, feat, cond = utils.prep_data(
-        batch,
+        cur_batch,
         config.coord_scale,
         config.feat_scale,
-        config.n_points // config.n_combine_samples,
+        cur_n_points // config.n_combine_samples,
         n_combine_samples=config.n_combine_samples,
         use_feat=config.use_feat,
         cond_mode=config.cond_mode,
         dst_index_cond=config.train_set == 'mixed',
         add_dummy_cond=len(config.initial_checkpoint_path) > 0,  # pylint: disable=g-explicit-length-test
     )
+
+    if config.get('use_bf16', False):
+      coord = coord.astype(jnp.bfloat16)
+      if feat is not None:
+        feat = feat.astype(jnp.bfloat16)
 
     return utils.update_state(
         model=model,
@@ -362,6 +386,10 @@ def train_flow_matching(
         reorder_noise_strength=config.reorder_noise_strength,
         point_cond_sample_threshold=config.point_cond_sample_threshold,
         feat_cond_dropout_threshold=config.feat_cond_dropout_threshold,
+        lambda_cfm=config.get('lambda_cfm', 0.0),
+        lambda_cond=config.get('lambda_cond', 0.0),
+        use_mst=config.get('use_mst', False),
+        use_bf16=config.get('use_bf16', False),
     )
 
   p_train_step = jax.jit(
@@ -391,6 +419,11 @@ def train_flow_matching(
         add_dummy_cond=len(config.initial_checkpoint_path) > 0,  # pylint: disable=g-explicit-length-test
     )
 
+    if config.get('use_bf16', False):
+      coord = coord.astype(jnp.bfloat16)
+      if feat is not None:
+        feat = feat.astype(jnp.bfloat16)
+
     variables = {'params': state.ema_params}
     if state.batch_stats:
       variables['batch_stats'] = state.batch_stats
@@ -409,6 +442,9 @@ def train_flow_matching(
         reorder_noise_strength=config.reorder_noise_strength,
         point_cond_sample_threshold=config.point_cond_sample_threshold,
         feat_cond_dropout_threshold=config.feat_cond_dropout_threshold,
+        lambda_cfm=config.get('lambda_cfm', 0.0),
+        lambda_cond=config.get('lambda_cond', 0.0),
+        use_mst=config.get('use_mst', False),
     )[0]
 
   p_val_step = jax.jit(
@@ -470,6 +506,7 @@ def train_flow_matching(
     utils.log_bins(log_dict, aux)
     running_train_loss += aux['loss']
     running_train_loss_squared += aux['loss'] ** 2
+    running_aux_loss += aux.get('aux_loss', 0.0)
     running_train_step += 1
 
     step = int(jax.device_get(state.step))
@@ -501,17 +538,22 @@ def train_flow_matching(
       writer.write_scalars(
           step * global_batch_size, utils.log_dict_to_scalars(log_dict)
       )
+      writer.write_scalars(
+          step * global_batch_size,
+          {'aux_loss': running_aux_loss / running_train_step},
+      )
 
       latest_checkpoint_manager.save(
           step,
           items={
-              'train_state': jax.tree.map(np.array, state),
+              'train_state': state,
               'train_iter': train_iter,
           },
       )
 
       running_train_loss = 0.0
       running_train_loss_squared = 0.0
+      running_aux_loss = 0.0
       running_train_step = 0
       log_dict = {
           'sum': collections.defaultdict(float),
@@ -617,7 +659,7 @@ def train_flow_matching(
         x_feat_gen_gathered = None
       if jax.process_index() == 0:
         with storage.atomic_file(
-            str(workdir / 'x_gen.html'), 'w'
+            str(workdir / 'x_gen.html'), 'w', #local=False
         ) as f:
           utils.plot_point_clouds(
               x_gen_gathered[: utils.N_PLOT],
@@ -658,6 +700,7 @@ def train_flow_matching(
           with storage.atomic_file(
               str(workdir / 'best_s_mmd_train.npz'),
               'wb',
+           #   local=False,
           ) as f:
             save_dict = {'coord': np.asarray(x_gen_gathered)}
             if config.use_feat and x_feat_gen_gathered is not None:
@@ -665,7 +708,7 @@ def train_flow_matching(
             np.savez_compressed(f, **save_dict)
 
           with storage.atomic_file(
-              str(workdir / 'best_s_mmd_train.html'), 'w'
+              str(workdir / 'best_s_mmd_train.html'), 'w',# local=False
           ) as f:
             utils.plot_point_clouds(
                 x_gen_gathered[: utils.N_PLOT],
@@ -698,7 +741,7 @@ def train_flow_matching(
         best_checkpoint_manager.save(
             step,
             items={
-                'train_state': jax.tree.map(np.array, state),
+                'train_state': state,
             },
         )
 
