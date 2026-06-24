@@ -113,6 +113,10 @@ def get_model(
             out_dim=config.out_dim
             if hasattr(config, 'out_dim') and config.out_dim > 0
             else None,
+            remat=config.get('use_remat', False),
+            dtype=jnp.bfloat16
+            if config.get('use_bf16', False)
+            else jnp.float32,
         )
     )
   else:
@@ -152,6 +156,11 @@ def compute_loss(
     reorder_noise_strength: float = 0.0,
     point_cond_sample_threshold: float = 0.0,
     feat_cond_dropout_threshold: float = 0.0,
+    lambda_cfm: float = 0.0,
+    lambda_cond: float = 0.0,
+    use_mst: bool = False,
+    use_class_noise: bool = False,
+    class_labels: jax.Array | None = None,
 ) -> tuple[Any, dict[str, Any]]:
   """Computes the flow matching loss.
 
@@ -172,6 +181,11 @@ def compute_loss(
     reorder_noise_strength: Strength of noise added after reordering.
     point_cond_sample_threshold: Probability to sample points for conditioning.
     feat_cond_dropout_threshold: Probability to drop features for conditioning.
+    lambda_cfm: CFM loss weight.
+    lambda_cond: Conditioning loss weight.
+    use_mst: Whether to use MST.
+    use_class_noise: Whether to use class-dependent noise.
+    class_labels: Class labels for noise shifting.
 
   Returns:
     Loss value and auxiliary outputs.
@@ -181,6 +195,10 @@ def compute_loss(
   )
   x_1 = jnp.concatenate((coord, feat), axis=2) if feat is not None else coord
   x_0 = jax.random.normal(rng_x, x_1.shape)
+  if use_class_noise and class_labels is not None:
+    # Assume class_labels contains only 0 and 1. Map 0/1 to -1/+1.
+    shift = class_labels[:, None, None] * 2.0 - 1.0
+    x_0 = x_0 + shift
   if reorder_type == 'axes':
     assert feat is None
     x_0 = reorder.reorder_z_sfc(x_0)
@@ -265,7 +283,7 @@ def compute_loss(
     # coordinates are first 3 dims, then features
     pred_x_1 = x_t[:, :, :3] + (1 - t_exp) * pred_dx_t[:, :, :3]
     # compute squared dist of pred_x_1 and x_1
-    dists = ((pred_x_1[:, :, None] - x_1[:, None, :]) ** 2).sum(-1)
+    dists = ((pred_x_1[:, :, None] - x_1[:, None, :, :3]) ** 2).sum(-1)
 
     all_loss = ((dx_t[:, :, None] - pred_dx_t[:, None, :]) ** 2).sum(-1)
 
@@ -294,6 +312,27 @@ def compute_loss(
 
     elementwise_loss = elementwise_loss.mean(axis=range(1, len(x_1.shape)))
 
+  if lambda_cfm > 0:
+    num_devices = jax.device_count()
+    batch_size = dx_t.shape[0]
+    local_batch_size = batch_size // num_devices
+    dx_t_reshaped = dx_t.reshape(num_devices, local_batch_size, *dx_t.shape[1:])
+    dx_t_neg_reshaped = jnp.roll(dx_t_reshaped, shift=1, axis=1)
+    dx_t_neg = dx_t_neg_reshaped.reshape(dx_t.shape)
+
+    loss_neg = (dx_t_neg - pred_dx_t) ** 2
+    loss_neg = loss_neg.mean(axis=range(1, len(x_1.shape)))
+    elementwise_loss = elementwise_loss - lambda_cfm * loss_neg
+
+  if lambda_cond > 0:
+    pred_x_1 = x_t + (1 - t_exp) * pred_dx_t
+    pred_coord = pred_x_1[:, :, :3]
+
+    aux_loss = compute_aux_loss(coord, pred_coord, use_mst=use_mst)
+    elementwise_loss = elementwise_loss + lambda_cond * aux_loss
+  else:
+    aux_loss = jnp.zeros((x_1.shape[0],))
+
   # TODO(riegerfr): extend loss:
   # v pred mse + (pred_1 - x_1)**2 + (pred_0-x_0)**2
   # TODO(riegerfr): penalize curvature directly? get second derivative?
@@ -304,6 +343,7 @@ def compute_loss(
       'elementwise_loss': elementwise_loss,
       'loss': loss,
       'batch_stats': batch_stats,
+      'aux_loss': aux_loss.mean(),
   }
 
 
@@ -323,6 +363,11 @@ def update_state(
     reorder_noise_strength: float = 0.0,
     point_cond_sample_threshold: float = 0.0,
     feat_cond_dropout_threshold: float = 0.0,
+    lambda_cfm: float = 0.0,
+    lambda_cond: float = 0.0,
+    use_mst: bool = False,
+    use_class_noise: bool = False,
+    class_labels: jax.Array | None = None,
     comp_loss: Callable[..., Any] = compute_loss,
 ) -> tuple[TrainState, Any]:
   """Performs a single training step.
@@ -343,6 +388,11 @@ def update_state(
     reorder_noise_strength: Strength of noise added after reordering.
     point_cond_sample_threshold: Probability to sample points for conditioning.
     feat_cond_dropout_threshold: Probability to drop features for conditioning.
+    lambda_cfm: CFM loss weight.
+    lambda_cond: Conditioning loss weight.
+    use_mst: Whether to use MST.
+    use_class_noise: Whether to use class-dependent noise.
+    class_labels: Class labels for noise shifting.
     comp_loss: Loss function to use.
 
   Returns:
@@ -368,6 +418,11 @@ def update_state(
         reorder_noise_strength=reorder_noise_strength,
         point_cond_sample_threshold=point_cond_sample_threshold,
         feat_cond_dropout_threshold=feat_cond_dropout_threshold,
+        lambda_cfm=lambda_cfm,
+        lambda_cond=lambda_cond,
+        use_mst=use_mst,
+        use_class_noise=use_class_noise,
+        class_labels=class_labels,
     )
 
   grad_fn = jax.grad(loss_fn, has_aux=True)
@@ -608,6 +663,8 @@ def generate_samples(
     guidance_scale: jax.Array | None = None,
     guide: bool = False,
     solver: str = 'midpoint',
+    use_class_noise: bool = False,
+    class_labels: jax.Array | None = None,
 ) -> jax.Array:
   """Generates samples from the model.
 
@@ -626,6 +683,8 @@ def generate_samples(
     guidance_scale: Guidance scale for guidance.
     guide: Whether to guide the model.
     solver: The ODE solver to use ('midpoint' or 'rk4').
+    use_class_noise: Whether to use class-dependent noise.
+    class_labels: Class labels for noise shifting.
 
   Returns:
     x_gen: Generated samples (or history).
@@ -648,6 +707,10 @@ def generate_samples(
     x_0 = jax.random.normal(
         rng, (cond.shape[0] if cond is not None else n_samples, *sample_shape)
     )
+    if use_class_noise and class_labels is not None:
+      # Map 0/1 to -1/+1
+      shift = class_labels[:, None, None] * 2.0 - 1.0
+      x_0 = x_0 + shift
   else:
     x_0 = noise
   timesteps = schedules.t_schedule(
@@ -858,6 +921,8 @@ def prep_data(
       cond = moment_embedding(coord, n=2)
     elif 'moment' in cond_mode:
       cond = moment_embedding(coord, n=4)
+    elif 'simple_embs' in cond_mode:
+      cond = simple_embs(coord, mst=True)
     elif cond_mode.startswith('fps'):
       n_points_cond = int(cond_mode.split('_')[1])
       cond = reorder_pc_x(coord[:, :n_points_cond]).reshape(coord.shape[0], -1)
@@ -1087,6 +1152,7 @@ def generate_and_plot_point_clouds(
       point_cond_mask,
       guidance_scale,
       guidance_scale is not None,
+      None,
   )
   if needs_repeat:
     x_gen = x_gen[:bs]
@@ -1542,13 +1608,16 @@ def prim_mst(adj: jax.Array) -> jax.Array:
   return mst_adj
 
 
-@functools.partial(jax.jit, static_argnames=('mst',))
-def simple_embs(pc: jax.Array, mst: bool = False) -> jax.Array:
+@functools.partial(jax.jit, static_argnames=('mst', 'subsample_mst'))
+def simple_embs(
+    pc: jax.Array, mst: bool = False, subsample_mst: bool = False
+) -> jax.Array:
   """Computes simple embeddings for a point cloud.
 
   Args:
     pc: Point cloud.
     mst: Whether to use the minimum spanning tree.
+    subsample_mst: Whether to subsample the MST.
 
   Returns:
     Simple embeddings.
@@ -1559,7 +1628,10 @@ def simple_embs(pc: jax.Array, mst: bool = False) -> jax.Array:
   covs = jax.numpy.einsum('ikj,ikl->ijl', centered_pc, centered_pc) / (
       pc.shape[1] - 1
   )
-  cov_eigval = jax.numpy.linalg.eigvalsh(covs) ** 0.5  # std along PCs
+  cov_eigval = (
+      jax.numpy.linalg.eigvalsh(covs.astype(jnp.float32)).astype(covs.dtype)
+      ** 0.5
+  )  # std along PCs
   # TODO(riegerfr): higher order moments?
 
   if pc.shape[1] <= 8192:
@@ -1595,7 +1667,16 @@ def simple_embs(pc: jax.Array, mst: bool = False) -> jax.Array:
       std_max_dists,
   ]
   if mst:
-    mst_weights = prim_mst(dists) * dists
+    if subsample_mst:
+      pc_sub, _ = spatial.subsample_points(pc, 256)
+      dists_mst = (
+          jnp.sum((pc_sub[:, None, :] - pc_sub[:, :, None]) ** 2, axis=-1)
+          ** 0.5
+      )
+      mst_weights = prim_mst(dists_mst) * dists_mst
+    else:
+      mst_weights = prim_mst(dists) * dists
+
     mst_max = mst_weights.max((-2, -1))[:, None]
     mst_sum = mst_weights.sum(axis=(-2, -1))[:, None]
     # TODO(riegerfr): also std (but need to select only mst edges, same for
@@ -1607,6 +1688,45 @@ def simple_embs(pc: jax.Array, mst: bool = False) -> jax.Array:
       feats,
       axis=-1,
   )
+
+
+def load_embeddings(cfg, split, subset_size=16384, mst=True):
+  n_combine_samples = cfg.get('n_combine_samples', 1)
+  emb_path_suffix = f'_cs{n_combine_samples}' if n_combine_samples > 1 else ''
+
+  emb_file = (
+      cfg.simple_emb_path
+      + f'emb_{cfg.train_set if cfg.train_set not in ("sub1", "sub2", "all") else "train"}_{cfg.n_points}{emb_path_suffix}_{split}{"_mst" if mst else ""}.npz'
+  )
+  logging.info('Loading embeddings from %s', emb_file)
+  with gfile.Open(emb_file, 'rb') as f:
+    return np.load(f)['arr_0'][:subset_size]
+
+
+def compute_aux_loss(coord, pred_coord, use_mst=False):
+  """Computes auxiliary loss based on simple embeddings.
+
+  Args:
+    coord: Ground truth coordinates.
+    pred_coord: Predicted coordinates.
+    use_mst: Whether to use MST features in simple embeddings.
+
+  Returns:
+    Mean squared error between normalized simple embeddings.
+  """
+  coord_sub = coord[:, :256]
+  pred_coord_sub = pred_coord[:, :256]
+
+  gt_feats = simple_embs(coord_sub, mst=use_mst)
+  pred_feats = simple_embs(pred_coord_sub, mst=use_mst)
+
+  gt_std = jnp.std(gt_feats, axis=0, keepdims=True)
+  gt_std = jnp.where(gt_std == 0, 1.0, gt_std)
+
+  gt_feats = gt_feats / gt_std
+  pred_feats = pred_feats / gt_std
+
+  return jnp.mean((pred_feats - gt_feats) ** 2, axis=-1)
 
 
 def compute_metrics(
@@ -1631,8 +1751,6 @@ def compute_metrics(
     Tuple of MMD and FID metrics for training and validation sets, and MMD
     metrics for a subset of the embeddings.
   """
-  n_combine_samples = cfg.get('n_combine_samples', 1)
-  emb_path_suffix = f'_cs{n_combine_samples}' if n_combine_samples > 1 else ''
   batch_size = min(4, cfg.batch_size)
   embs_gen = jax.numpy.concatenate([
       simple_embs(x_gen[i * batch_size : (i + 1) * batch_size], mst)  # pytype: disable=wrong-arg-types
@@ -1640,22 +1758,10 @@ def compute_metrics(
   ])
 
   assert embs_gen.shape[0] == x_gen.shape[0]
-  with open(
-      (
-          cfg.simple_emb_path
-          + f'emb_{cfg.train_set if cfg.train_set not in ("sub1", "sub2", "all") else "train"}_{cfg.n_points}{emb_path_suffix}_train{"_mst" if mst else ""}.npz'
-      ),
-      'rb',
-  ) as f:
-    embs_train = np.load(f)['arr_0'][:subset_size]  # subset to save memory.
-  with open(
-      (
-          cfg.simple_emb_path
-          + f'emb_{cfg.train_set if cfg.train_set not in ("sub1", "sub2", "all") else "train"}_{cfg.n_points}{emb_path_suffix}_val{"_mst" if mst else ""}.npz'
-      ),
-      'rb',
-  ) as f:
-    embs_val = np.load(f)['arr_0'][:16384]
+
+  embs_train = load_embeddings(cfg, 'train', subset_size=subset_size, mst=mst)
+  embs_val = load_embeddings(cfg, 'val', subset_size=16384, mst=mst)
+
   assert embs_train.shape[1] == embs_val.shape[1] == embs_gen.shape[1]
   if norm_std:
     train_std = embs_train.std(axis=0, keepdims=True)  # pytype: disable=attribute-error
