@@ -14,17 +14,17 @@
 # limitations under the License.
 """Point Infinity model, see https://arxiv.org/pdf/2404.03566."""
 
-from flax import struct
-import flax.linen as nn
-import jax
-import jax.numpy as jnp
-
+from typing import Any
 from connectomics.jax import spatial
 from connectomics.jax.models import point
 from connectomics.mogen import reorder
 from connectomics.mogen import utils
 from connectomics.mogen.models import minimal_network_utils
 from connectomics.mogen.models import minimal_vit as vit
+from flax import struct
+import flax.linen as nn
+import jax
+import jax.numpy as jnp
 
 
 @struct.dataclass
@@ -42,6 +42,9 @@ class PointInfinityConfig:
   combine_z: int = 1
   n_combine_samples: int = 1
   out_dim: int | None = None
+  remat: bool = False
+  dtype: Any = jnp.float32
+  use_gemma: bool = False
 
 
 class PointInfinityBlock(nn.Module):
@@ -59,38 +62,46 @@ class PointInfinityBlock(nn.Module):
     z = z + vit.MultiHeadDotProductAttention(
         num_heads=self.config.n_heads,
         normalize_qk=True,
+        dtype=self.config.dtype,
     )(
-        nn.RMSNorm()(z),
-        nn.RMSNorm()(x),
+        nn.RMSNorm(dtype=self.config.dtype)(z),
+        nn.RMSNorm(dtype=self.config.dtype)(x),
     )
     z = z + (
         vit.MlpBlock(
             dropout=self.config.dropout,
-        )(nn.RMSNorm()(z), None, True)
+            dtype=self.config.dtype,
+        )(nn.RMSNorm(dtype=self.config.dtype)(z), None, True)
     )
 
     for _ in range(self.config.n_subblocks):
-      z_normed = nn.RMSNorm()(z)
+      z_normed = nn.RMSNorm(dtype=self.config.dtype)(z)
       z = z + vit.MultiHeadDotProductAttention(
           num_heads=self.config.n_heads,
           normalize_qk=True,
+          dtype=self.config.dtype,
       )(
           z_normed,
           z_normed,
       )
       z = z + (
-          vit.MlpBlock(dropout=self.config.dropout)(nn.RMSNorm()(z), None, True)
+          vit.MlpBlock(dropout=self.config.dropout, dtype=self.config.dtype)(
+              nn.RMSNorm(dtype=self.config.dtype)(z), None, True
+          )
       )
 
     x = x + vit.MultiHeadDotProductAttention(
         num_heads=self.config.n_heads,
         normalize_qk=True,
+        dtype=self.config.dtype,
     )(
-        nn.RMSNorm()(x),
-        nn.RMSNorm()(z),
+        nn.RMSNorm(dtype=self.config.dtype)(x),
+        nn.RMSNorm(dtype=self.config.dtype)(z),
     )
     x = x + (
-        vit.MlpBlock(dropout=self.config.dropout)(nn.RMSNorm()(x), None, True)
+        vit.MlpBlock(dropout=self.config.dropout, dtype=self.config.dtype)(
+            nn.RMSNorm(dtype=self.config.dtype)(x), None, True
+        )
     )
     return x, z
 
@@ -111,7 +122,9 @@ class PointInfinity(nn.Module):
       point_cond_mask: jax.Array | None = None,
   ) -> jax.Array:
     if t is not None:
-      t_emb = vit.MlpBlock(dropout=self.config.dropout)(
+      t_emb = vit.MlpBlock(
+          dropout=self.config.dropout, dtype=self.config.dtype
+      )(
           minimal_network_utils.get_timestep_embedding(
               t,
               embedding_dim=self.config.latent_dim,
@@ -119,10 +132,16 @@ class PointInfinity(nn.Module):
           )[:, None, :],
           None,
           True,
-      )[:, 0, :]
+      )[
+          :, 0, :
+      ]
     else:
       t_emb = None
-    cond = nn.Dense(self.config.latent_dim)(cond) if cond is not None else None
+    cond = (
+        nn.Dense(self.config.latent_dim, dtype=self.config.dtype)(cond)
+        if cond is not None
+        else None
+    )
 
     if self.config.combine_z > 1:
       if feat is not None:
@@ -179,11 +198,13 @@ class PointInfinity(nn.Module):
     if feat is not None:
       x = jnp.concatenate((x, feat), axis=-1)
 
-    x = nn.Dense(self.config.point_dim)(x)
+    x = nn.Dense(self.config.point_dim, dtype=self.config.dtype)(x)
 
     z = jnp.repeat(
         nn.Embed(
-            self.config.n_latents, self.config.latent_dim
+            self.config.n_latents,
+            self.config.latent_dim,
+            dtype=self.config.dtype,
         )(  # TODO(riegerfr): scale init
             jnp.arange(self.config.n_latents)
         )[
@@ -195,8 +216,17 @@ class PointInfinity(nn.Module):
     z = jnp.concat((z, t_emb[:, None, :]), axis=1) if t_emb is not None else z
     z = jnp.concat((z, cond[:, None, :]), axis=1) if cond is not None else z
 
+    remat_fn = nn.remat if self.config.remat else lambda x: x
     for _ in range(self.config.n_blocks):
-      x, z = PointInfinityBlock(self.config)(x, z)
+      if self.config.use_gemma:
+        # pylint: disable=g-import-not-at-top
+        from connectomics.mogen.models import gemma_pointinfinity
+
+        x, z = remat_fn(gemma_pointinfinity.GemmaPointInfinityBlock)(
+            self.config
+        )(x, z)
+      else:
+        x, z = remat_fn(PointInfinityBlock)(self.config)(x, z)
 
     x = nn.Dense(
         (
@@ -205,6 +235,7 @@ class PointInfinity(nn.Module):
             else self.config.out_dim
         )
         * self.config.combine_z,
+        dtype=self.config.dtype,
     )(x)
 
     if self.config.combine_z > 1:
