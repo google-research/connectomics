@@ -181,7 +181,7 @@ def build_mask(
       elif config.volume is not None:
         channels = config.volume.channels
 
-        volume_key = config.volume.mask.to_json()
+        volume_key = config.volume.mask.to_json()  # pyrefly: ignore[missing-attribute]
         if volume_key not in mask_volume_map:
           mask_volume_map[volume_key] = volume_decorator_fn(
               decorated_volume_loader(config.volume.mask)
@@ -192,10 +192,10 @@ def build_mask(
         logging.fatal('Unsupported mask source: %s', config.to_json())
 
       for chan_config in channels:
-        channel_mask = mask[chan_config.channel, ...]
+        channel_mask = mask[chan_config.channel, ...]  # pyrefly: ignore[unsupported-operation]
 
         if chan_config.nan_value is not None:
-          channel_mask = np.nan_to_num(channel_mask, chan_config.nan_value)
+          channel_mask = np.nan_to_num(channel_mask, chan_config.nan_value)  # pyrefly: ignore[no-matching-overload]
 
         if chan_config.expression:
           bool_mask = eval(chan_config.expression)  # pylint: disable=eval-used

@@ -84,7 +84,7 @@ class VolumeMetadata(
       raise ValueError('scale_factors must be a 3-element sequence.')
     path = new_path if new_path is not None else self.path
     return VolumeMetadata(
-        path=path,
+        path=path,  # pyrefly: ignore[bad-argument-type]
         volume_size=tuples.XYZ(*[
             int(x * scale) for x, scale in zip(self.volume_size, scale_factors)
         ]),
@@ -123,13 +123,13 @@ class DecoratedVolume:
       specs = []
       for spec in self.decorator_specs:
         # Support old, internal format.
-        if 'decorator' in spec:
-          spec['name'] = spec['decorator']
-          del spec['decorator']
-        if 'kwargs' in spec:
-          spec['args'] = decorators.DecoratorArgs.from_dict(spec['kwargs'])
-          del spec['kwargs']
-        specs.append(decorators.DecoratorSpec.from_dict(spec))
+        if 'decorator' in spec:  # pyrefly: ignore[not-iterable]
+          spec['name'] = spec['decorator']  # pyrefly: ignore[bad-index, unsupported-operation]
+          del spec['decorator']  # pyrefly: ignore[unsupported-operation]
+        if 'kwargs' in spec:  # pyrefly: ignore[not-iterable]
+          spec['args'] = decorators.DecoratorArgs.from_dict(spec['kwargs'])  # pyrefly: ignore[bad-index, missing-attribute, unsupported-operation]
+          del spec['kwargs']  # pyrefly: ignore[unsupported-operation]
+        specs.append(decorators.DecoratorSpec.from_dict(spec))  # pyrefly: ignore[missing-attribute]
       object.__setattr__(
           self,
           'decorator_specs',

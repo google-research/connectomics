@@ -124,7 +124,7 @@ class Subvolume:
   def __getitem__(self, ind: array.ArbitrarySlice) -> 'Subvolume':
     return RelativeSubvolumeIndexer(self)[ind]
 
-  def __eq__(self, other: Union['Subvolume', np.ndarray, int, float]):
+  def __eq__(self, other: Union['Subvolume', np.ndarray, int, float]):  # pyrefly: ignore[bad-override]
     if isinstance(other, np.ndarray) or isinstance(other, int) or isinstance(
         other, float):
       return np.all(self._data == other)
@@ -163,7 +163,7 @@ class Subvolume:
   @property
   def valid(self) -> bool:
     """Return whether this subvolume contains valid data."""
-    return len(self.shape) == 4 and np.all(self.size > 0)
+    return len(self.shape) == 4 and np.all(self.size > 0)  # pyrefly: ignore[bad-return]
 
   def new_bounding_box(self, bbox: bounding_box.BoundingBox) -> 'Subvolume':
     _check_bbox_dims(bbox, self._data)
@@ -256,17 +256,17 @@ class Subvolume:
       # contact with this subvolume.
       start_corner = origin + ((self.start - origin) // size * size)
     overlapping_box_limits = bounding_box.BoundingBox(
-        start=start_corner, end=self.start + self.size)
+        start=start_corner, end=self.start + self.size)  # pyrefly: ignore[bad-argument-type]
     gen = box_generator.BoxGenerator(overlapping_box_limits, size)
     new_subvols = []
     for box in gen.boxes:
       # Handle back edges
       if not clip_output_subvolumes and not np.all(box.size == size):
-        box = bounding_box.BoundingBox(box.start, size)
+        box = bounding_box.BoundingBox(box.start, size)  # pyrefly: ignore[bad-argument-type]
       split_data = self.index_abs[box.to_slice4d()]
       empty_data = np.full([split_data.shape[0]] + list(box.size[::-1]),
                            empty_value)
-      new_subvol = Subvolume(empty_data, box)
+      new_subvol = Subvolume(empty_data, box)  # pyrefly: ignore[bad-argument-type]
       new_subvol.merge_with(split_data, empty_value)
       if clip_output_subvolumes:
         new_subvol = new_subvol.clip_abs(self.bbox)

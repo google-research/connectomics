@@ -42,7 +42,7 @@ class MaskTest(absltest.TestCase):
     mask = m.build_mask(
         [mask_config],
         box,
-        decorated_volume_loader=lambda x: x,
+        decorated_volume_loader=lambda x: x,  # pyrefly: ignore[bad-argument-type]
         image=image,
     )
 
@@ -56,7 +56,7 @@ class MaskTest(absltest.TestCase):
     mask = m.build_mask(
         [mask_config],
         box,
-        decorated_volume_loader=lambda x: x,
+        decorated_volume_loader=lambda x: x,  # pyrefly: ignore[bad-argument-type]
         image=image,
     )
 

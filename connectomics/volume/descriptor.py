@@ -85,7 +85,7 @@ def open_descriptor(
       raise ValueError(
           'Context can only be applied to TensorStore-backed volumes')
     spec = copy.deepcopy(spec)
-    spec.tensorstore_config.spec['context'] = context
+    spec.tensorstore_config.spec['context'] = context  # pyrefly: ignore[missing-attribute]
 
   config = tsv.load_ts_config(spec.tensorstore_config)
 

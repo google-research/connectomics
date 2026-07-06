@@ -224,7 +224,7 @@ class SubvolumeProcessor:
     self._subvol_size = np.asarray(subvol_size)
     self._overlap = np.asarray(overlap)
     if np.all(self.overlap() == self._overlap):
-      self._context = tuple([np.asarray(c) for c in self.context()])
+      self._context = tuple([np.asarray(c) for c in self.context()])  # pyrefly: ignore[bad-assignment]
     else:
       pre = self._overlap // 2
       post = self._overlap - pre
@@ -291,7 +291,7 @@ class SubvolumeProcessor:
     front, back = self._context_for_box(box)
     fx, fy, fz = front
     bx, by, bz = np.array(data.shape[:0:-1]) - back
-    return Subvolume(data[:, fz:bz, fy:by, fx:bx], cropped_box)
+    return Subvolume(data[:, fz:bz, fy:by, fx:bx], cropped_box)  # pyrefly: ignore[bad-argument-type]
 
   # TODO(timblakely): Correct the return value from Any.
   def _open_volume(

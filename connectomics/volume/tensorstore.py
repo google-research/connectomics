@@ -30,8 +30,8 @@ import tensorstore as ts
 
 def tuple_deserialize(v: Sequence[Union[int, float]]) -> array.Tuple3f:
   if isinstance(v, tuple):
-    return v
-  return tuple(v)
+    return v  # pyrefly: ignore[bad-return]
+  return tuple(v)  # pyrefly: ignore[bad-return]
 
 
 @dataclasses.dataclass(eq=True)
@@ -47,7 +47,7 @@ class TensorstoreMetadata(utils.NPDataClassJsonMixin):
 
   def __post_init__(self):
     # Purely to ensure that voxel_size is a tuple if initialized with a list.
-    self.voxel_size = tuple(self.voxel_size)
+    self.voxel_size = tuple(self.voxel_size)  # pyrefly: ignore[bad-assignment]
 
 
 @dataclasses.dataclass(eq=True)
@@ -88,9 +88,9 @@ class TensorstoreVolume(base.Volume):
     return self._store[slices].read().result()
 
   @property
-  def volume_size(self) -> array.Tuple3i:
+  def volume_size(self) -> array.Tuple3i:  # pyrefly: ignore[bad-override]
     # TODO(timblakely): Handle non-CZYX volumes.
-    return tuple(self._store.shape[3:0:-1])
+    return tuple(self._store.shape[3:0:-1])  # pyrefly: ignore[bad-return]
 
   @property
   def voxel_size(self) -> array.Tuple3f:
@@ -99,7 +99,7 @@ class TensorstoreVolume(base.Volume):
 
   @property
   def shape(self) -> array.Tuple4i:
-    return self._store.shape
+    return self._store.shape  # pyrefly: ignore[bad-return]
 
   @property
   def ndim(self) -> int:

@@ -79,12 +79,12 @@ def from_specs(volume: base.Volume,
   """
 
   if decorator_factory is None:
-    decorator_factory = GlobalsDecoratorFactory()
+    decorator_factory = GlobalsDecoratorFactory()  # pyrefly: ignore[bad-assignment]
 
   for s in specs:
     args = s.get('args', [])
     kwargs = s.get('kwargs', {})
-    volume = decorator_factory.make_decorator(volume, s['decorator'], args,
+    volume = decorator_factory.make_decorator(volume, s['decorator'], args,  # pyrefly: ignore[missing-attribute]
                                               **kwargs)
   return volume
 
@@ -148,31 +148,31 @@ class Upsample(VolumeDecorator):
       ValueError: If scale is not 3d.
     """
     super().__init__(wrapped)
-    if len(scale) != 3:
+    if len(scale) != 3:  # pyrefly: ignore[bad-argument-type]
       raise ValueError('Expected a 3d scale in XYZ format')
-    self.scale_zyx = np.array(scale[::-1])
+    self.scale_zyx = np.array(scale[::-1])  # pyrefly: ignore[bad-index]
 
   @property
-  def volume_size(self) -> array.Tuple3i:
+  def volume_size(self) -> array.Tuple3i:  # pyrefly: ignore[bad-override]
     return self.scale_zyx[::-1] * self._wrapped.volume_size
 
   @property
-  def voxel_size(self) -> array.Tuple3i:
+  def voxel_size(self) -> array.Tuple3i:  # pyrefly: ignore[bad-override]
     return tuple(self._wrapped.pixel_size / self.scale_zyx[::-1])
 
   @property
   def shape(self) -> array.Tuple4i:
-    return np.insert(self.scale_zyx, 0, 1) * self._wrapped.shape
+    return np.insert(self.scale_zyx, 0, 1) * self._wrapped.shape  # pyrefly: ignore[bad-return]
 
   @property
   def bounding_boxes(self) -> list[bounding_box.BoundingBox]:
-    return [b.scale(self.scale_zyx[::-1]) for b in self._wrapped.bounding_boxes]
+    return [b.scale(self.scale_zyx[::-1]) for b in self._wrapped.bounding_boxes]  # pyrefly: ignore[bad-argument-type]
 
   def get_points(self, points: array.PointLookups) -> np.ndarray:
     scaled_points = list(points)
     for i in range(1, 4):
       scaled_points[i] = np.array(scaled_points[i]) // self.scale_zyx[i - 1]
-    return self._wrapped.get_points(tuple(scaled_points))
+    return self._wrapped.get_points(tuple(scaled_points))  # pyrefly: ignore[bad-argument-type]
 
   def get_slices(self, slices: array.CanonicalSlice) -> np.ndarray:
     ceildiv = lambda x, y: -(-x // y)
@@ -183,7 +183,7 @@ class Upsample(VolumeDecorator):
       assert slices[i].stop is not None
       end = ceildiv(slices[i].stop, self.scale_zyx[i - 1])
       scaled_slice[i] = np.s_[begin:end]
-    low_res = self._wrapped.get_slices(tuple(scaled_slice))
+    low_res = self._wrapped.get_slices(tuple(scaled_slice))  # pyrefly: ignore[bad-argument-type]
     # Upsample.
     upsampled = low_res.repeat(
         self.scale_zyx[0], axis=1).repeat(

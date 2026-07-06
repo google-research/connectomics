@@ -109,7 +109,7 @@ class DecoratorTest(absltest.TestCase):
     self.assertEqual((1, 1000, 4000, 6000), tuple(upscaled.shape))
     self.assertLen(upscaled.bounding_boxes, 1)
     self.assertEqual(
-        BBox(bbox.start * (2, 2, 1), bbox.size * (2, 2, 1)),
+        BBox(bbox.start * (2, 2, 1), bbox.size * (2, 2, 1)),  # pyrefly: ignore[bad-argument-type]
         upscaled.bounding_boxes[0])
 
     expected = data[0, 1, 1, 5].ravel()[0]

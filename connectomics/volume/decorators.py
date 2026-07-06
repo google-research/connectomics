@@ -93,7 +93,7 @@ def _merge_specs(base: MutableJsonSpec, overrides: JsonSpec,
 def adjust_schema_for_chunksize(schema: ts.Schema,
                                 other_chunksize: Sequence[int]) -> ts.Schema:
   chunksize = np.lcm(
-      [s if s else 1 for s in schema.chunk_layout.read_chunk.shape],
+      [s if s else 1 for s in schema.chunk_layout.read_chunk.shape],  # pyrefly: ignore[not-iterable]
       [s if s else 1 for s in other_chunksize])
   chunksize = np.minimum(chunksize, schema.shape)
   json = schema.to_json()
@@ -293,7 +293,7 @@ def _process_planes_nd(
     return processor(data, **processor_args)
 
   win = list(data.shape)
-  for b in batch_dims:
+  for b in batch_dims:  # pyrefly: ignore[not-iterable]
     win[b] = 1
   data_view = np.lib.stride_tricks.sliding_window_view(data, window_shape=win)
 
@@ -302,12 +302,12 @@ def _process_planes_nd(
   elif output is None:
     output = np.empty_like(data)
 
-  it = np.nditer(output, op_axes=[batch_dims], flags=['multi_index'])
+  it = np.nditer(output, op_axes=[batch_dims], flags=['multi_index'])  # pyrefly: ignore[no-matching-overload]
   with it:
     idx = [slice(None) for _ in range(num_dim)]
     for _ in it:
-      for i, b in enumerate(batch_dims):
-        idx[b] = list(it.multi_index)[i]
+      for i, b in enumerate(batch_dims):  # pyrefly: ignore[bad-argument-type]
+        idx[b] = list(it.multi_index)[i]  # pyrefly: ignore[unsupported-operation]
       output[tuple(idx)] = processor(
           data_view[tuple(idx + [...])].squeeze(), **processor_args)[...]
   return output
@@ -353,7 +353,7 @@ class Filter(Decorator):
     self._pad_border = pad_border
 
   @property
-  def requires_context(self) -> bool:
+  def requires_context(self) -> bool:  # pyrefly: ignore[bad-override]
     return False if self._overlap_width is None else True
 
   def decorate(self, input_ts: ts.TensorStore) -> ts.TensorStore:
@@ -447,7 +447,7 @@ def _exposure_filter(
     return supported_modes[mode](data, **filter_args)
   else:
     result = supported_modes[mode](_cast_img(data, 'float64'), **filter_args)
-    return _cast_img(result, data.dtype)
+    return _cast_img(result, data.dtype)  # pyrefly: ignore[bad-argument-type]
 
 
 @gin.register
@@ -680,7 +680,7 @@ def _threshold(
   """Thresholds image."""
   idxs = np.where(data > threshold)
   if indices:
-    return idxs
+    return idxs  # pyrefly: ignore[bad-return]
   else:
     mask = np.zeros_like(data)
     mask[idxs] = True
@@ -794,7 +794,7 @@ def _unsharp_mask(
   result = data if not cast_float64 else _cast_img(data, 'float64')
   for _ in range(num_iterations):
     result = skimage.filters.unsharp_mask(result, **unsharp_mask_kwargs)
-  return result if not cast_float64 else _cast_img(result, data.dtype)
+  return result if not cast_float64 else _cast_img(result, data.dtype)  # pyrefly: ignore[bad-argument-type]
 
 
 @gin.register
@@ -897,7 +897,7 @@ class Interpolation(Decorator):
         array[...] = np.pad(data, pad_width=pad_width,
                             **self._interpolation_args)
       else:
-        array[...] = map_coordinates(data, np.mgrid[slices],
+        array[...] = map_coordinates(data, np.mgrid[slices],  # pyrefly: ignore[bad-argument-type]
                                      **self._interpolation_args)
 
     json = input_ts.schema.to_json()
@@ -1085,7 +1085,7 @@ def _expand_domain(
     assert w[0] >= 0 and w[1] >= 0, 'Width must be non-negative.'
 
     incl_min, excl_max = d.inclusive_min - w[0], d.exclusive_max + w[1]
-    expanded_domain.append(ts.Dim(max(b[0], incl_min), min(b[1], excl_max),
+    expanded_domain.append(ts.Dim(max(b[0], incl_min), min(b[1], excl_max),  # pyrefly: ignore[no-matching-overload]
                                   label=d.label))
 
     truncation_before = 0 if incl_min >= b[0] else b[0] - incl_min
@@ -1365,7 +1365,7 @@ class Write(Writer):
     # This must be cleared, otherwise serializing the Write can exceed the
     # recursion limit, putatively due to the possible presence of SpecActions
     # that are gin wrapped.
-    self._output_spec_overrides = None
+    self._output_spec_overrides = None  # pyrefly: ignore[bad-assignment]
 
     self._initialized = True
 
@@ -1377,11 +1377,11 @@ class Write(Writer):
     def side_write_read(domain: ts.IndexDomain, array: np.ndarray,
                         unused_read_params: ts.VirtualChunkedReadParameters):
       if self._keep_existing_chunks:
-        existing_data = self._output_ts[domain].read().result()
+        existing_data = self._output_ts[domain].read().result()  # pyrefly: ignore[unsupported-operation]
         if existing_data.sum() != 0.0:
-          if all(self._output_ts.dimension_units):
+          if all(self._output_ts.dimension_units):  # pyrefly: ignore[missing-attribute]
             resolution = '-' + '-'.join(
-                str(u.multiplier) for u in self._output_ts.dimension_units
+                str(u.multiplier) for u in self._output_ts.dimension_units  # pyrefly: ignore[missing-attribute]
             )
           else:
             resolution = ''
@@ -1393,11 +1393,11 @@ class Write(Writer):
 
       logging.vlog(2, 'Processing chunk %s', domain)
       data = input_ts[domain]
-      self._output_ts[domain] = data
+      self._output_ts[domain] = data  # pyrefly: ignore[unsupported-operation]
       array[...] = data
 
     schema = adjust_schema_for_chunksize(
-        input_ts.schema, self._output_ts.chunk_layout.read_chunk.shape)
+        input_ts.schema, self._output_ts.chunk_layout.read_chunk.shape)  # pyrefly: ignore[missing-attribute]
     schema = adjust_schema_for_virtual_chunked(schema)
     return ts.virtual_chunked(
         side_write_read, schema=schema, context=self._context)
@@ -1407,7 +1407,7 @@ class Write(Writer):
       raise AssertionError('Write.initialize must be called first.')
     materialize_log = metadata_utils.get_run_log()
     materialize_log['gin_operative_config'] = gin.operative_config_str()
-    kvs = self._output_ts.kvstore
+    kvs = self._output_ts.kvstore  # pyrefly: ignore[missing-attribute]
     assert kvs is not None
     log_kvstore = kvs.spec() / 'materialize_log.json'
     yield materialize_log, log_kvstore
@@ -1415,7 +1415,7 @@ class Write(Writer):
   def debug_string(self) -> str:
     if not self._initialized:
       raise AssertionError('Write.initialize must be called first.')
-    ds = pprint.pformat(self._output_ts.schema.to_json())
+    ds = pprint.pformat(self._output_ts.schema.to_json())  # pyrefly: ignore[missing-attribute]
     return '_output_ts.schema:\n' + ds
 
 
@@ -1454,9 +1454,9 @@ class MultiscaleWrite(Writer):
     domain = self._output_base_spec.domain
     assert domain is not None
     self._axes = domain.labels
-    if all(self._output_base_spec.dimension_units):
+    if all(self._output_base_spec.dimension_units):  # pyrefly: ignore[bad-argument-type]
       self._dimension_units = self._output_base_spec.dimension_units
-    elif all(ts.Spec(input_schema_spec).dimension_units):
+    elif all(ts.Spec(input_schema_spec).dimension_units):  # pyrefly: ignore[bad-argument-type]
       self._dimension_units = ts.Spec(input_schema_spec).dimension_units
     else:
       self._dimension_units = None
@@ -1468,11 +1468,11 @@ class MultiscaleWrite(Writer):
     for i, sdf in enumerate(seq_ds_factors):
       self._downsampling_factors.append(list(np.array(sdf) * cur_ds))
       cur_ds = self._downsampling_factors[-1]
-      self._chain.append(Downsample(sdf, self._downsample_method))
+      self._chain.append(Downsample(sdf, self._downsample_method))  # pyrefly: ignore[bad-argument-type]
 
-      spec_overrides = self._output_base_spec_overrides.copy()
+      spec_overrides = self._output_base_spec_overrides.copy()  # pyrefly: ignore[missing-attribute]
       spec_overrides['kvstore'] = (
-          self._output_base_spec.kvstore / f's{i}').to_json()
+          self._output_base_spec.kvstore / f's{i}').to_json()  # pyrefly: ignore[unsupported-operation]
       write = Write(
           spec_overrides, keep_existing_chunks=self._keep_existing_chunks)
       self._chain.append(write)
@@ -1488,7 +1488,7 @@ class MultiscaleWrite(Writer):
     if not self._initialized:
       raise AssertionError('MultiscaleWrite.initialize must be called first.')
     decorated_ts = input_ts
-    for c in self._chain:
+    for c in self._chain:  # pyrefly: ignore[not-iterable]
       decorated_ts = c.decorate(decorated_ts)
     return decorated_ts
 
@@ -1514,12 +1514,12 @@ class MultiscaleWrite(Writer):
   def post_jsons(self) -> Iterable[tuple[JsonSpec, ts.KvStore.Spec]]:
     if not self._initialized:
       raise AssertionError('MultiscaleWrite.initialize must be called first.')
-    for c in self._chain:
+    for c in self._chain:  # pyrefly: ignore[not-iterable]
       if isinstance(c, Writer):
         for pj in c.post_jsons():
           yield pj
 
-    multiscale_kvstore = self._output_base_spec.kvstore / 'attributes.json'
+    multiscale_kvstore = self._output_base_spec.kvstore / 'attributes.json'  # pyrefly: ignore[missing-attribute]
     yield self.multiscale_spec, multiscale_kvstore
 
   def debug_string(self) -> str:
@@ -1527,7 +1527,7 @@ class MultiscaleWrite(Writer):
       raise AssertionError('MultiscaleWrite.initialize must be called first.')
     return (
         '_output_base_spec:\n' +
-        pprint.pformat(self._output_base_spec.to_json()) + '\n' +
+        pprint.pformat(self._output_base_spec.to_json()) + '\n' +  # pyrefly: ignore[missing-attribute]
         'multiscale_spec:\n' +
         pprint.pformat(self.multiscale_spec)
     )
@@ -1624,7 +1624,7 @@ class DfOverF(Decorator):
 
     schema = adjust_schema_for_chunksize(
         ts.cast(input_ts, 'float32').schema,
-        f0_ts.chunk_layout.read_chunk.shape)
+        f0_ts.chunk_layout.read_chunk.shape)  # pyrefly: ignore[bad-argument-type]
     schema = adjust_schema_for_virtual_chunked(schema)
     return ts.virtual_chunked(
         df_over_f_read, schema=schema, context=self._context)
@@ -1664,8 +1664,8 @@ def _compute_average_evoked_response(
   data = np.swapaxes(data, axis, 0)
 
   if not condition_baselines_exclusive_max:
-    condition_baselines_exclusive_max = [None] * len(condition_period_offsets)
-  if len(condition_baselines_exclusive_max) != len(condition_period_offsets):
+    condition_baselines_exclusive_max = [None] * len(condition_period_offsets)  # pyrefly: ignore[bad-assignment]
+  if len(condition_baselines_exclusive_max) != len(condition_period_offsets):  # pyrefly: ignore[bad-argument-type]
     raise ValueError(
         'Length of `condition_baselines_exclusive_max` does not match length of'
         ' `condition_period_offsets`.'
@@ -1708,7 +1708,7 @@ def _compute_average_evoked_response(
     assert t_current == t_end
     period = np.nanmean(
         np.stack(periods, axis=0)[
-            : condition_baselines_exclusive_max[condition]
+            : condition_baselines_exclusive_max[condition]  # pyrefly: ignore[unsupported-operation]
         ],
         axis=0,
     )

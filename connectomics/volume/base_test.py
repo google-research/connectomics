@@ -87,9 +87,9 @@ class BaseVolumeTest(absltest.TestCase):
     sv = v[0, 1:3, 5:, :]
     self.assertTrue(v.called)
     self.assertEqual(sv.data.shape, (1, 2, 6, 10))
-    self.assertEqual(tuple(sv.bbox.start), (0, 5, 1))
-    self.assertEqual(tuple(sv.bbox.end), (10, 11, 3))
-    self.assertEqual(tuple(sv.bbox.size), (10, 6, 2))
+    self.assertEqual(tuple(sv.bbox.start), (0, 5, 1))  # pyrefly: ignore[missing-attribute]
+    self.assertEqual(tuple(sv.bbox.end), (10, 11, 3))  # pyrefly: ignore[missing-attribute]
+    self.assertEqual(tuple(sv.bbox.size), (10, 6, 2))  # pyrefly: ignore[missing-attribute]
 
     # Test accessing the data directly without the subvolume abstraction.
     v.called = False

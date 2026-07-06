@@ -54,7 +54,7 @@ class VolumeIndexer:
       # point-lookup path in the above conditional
       ind = typing.cast(array.PointLookups, ind)
       return self._volume.get_points(ind)
-    return subvolume.Subvolume(self._volume.get_slices(ind), slice_to_bbox(ind))
+    return subvolume.Subvolume(self._volume.get_slices(ind), slice_to_bbox(ind))  # pyrefly: ignore[bad-argument-type]
 
 
 class DirectVolumeIndexer(VolumeIndexer):
@@ -82,9 +82,9 @@ class Volume:
   def __setitem__(self, ind: array.IndexExpOrPointLookups, value: np.ndarray):
     ind = array.normalize_index(ind, self.shape)
     if array.is_point_lookup(ind):
-      self.write_points(ind, value)
+      self.write_points(ind, value)  # pyrefly: ignore[bad-argument-type]
     else:
-      self.write_slices(ind, value)
+      self.write_slices(ind, value)  # pyrefly: ignore[bad-argument-type]
 
   # TODO(timblakely): Only a temporary shim while we convert all internal usage to
   # using Subvolumes.
@@ -112,7 +112,7 @@ class Volume:
 
   def write(self, subvol: subvolume.Subvolume):
     self.write_slices(
-        array.normalize_index(subvol.bbox.to_slice4d(), self.shape),
+        array.normalize_index(subvol.bbox.to_slice4d(), self.shape),  # pyrefly: ignore[bad-argument-type]
         subvol.data)
 
   @property
@@ -139,7 +139,7 @@ class Volume:
   @property
   def dtype(self) -> np.dtype:
     """Datatype of the underlying data."""
-    return self.meta.dtype
+    return self.meta.dtype  # pyrefly: ignore[bad-return]
 
   @property
   def bounding_boxes(self) -> list[bounding_box.BoundingBox]:
@@ -156,8 +156,8 @@ class Volume:
     # For bounding boxes dims that are entirely outside of the volume, they will
     # be clipped to the nearest edge/corner and have zero size.
     zeros = np.repeat(0, len(self.volume_size))
-    start = np.minimum(np.maximum(box.start, zeros), self.volume_size)
-    end = np.minimum(np.maximum(box.end, zeros), self.volume_size)
+    start = np.minimum(np.maximum(box.start, zeros), self.volume_size)  # pyrefly: ignore[no-matching-overload]
+    end = np.minimum(np.maximum(box.end, zeros), self.volume_size)  # pyrefly: ignore[no-matching-overload]
     return bounding_box.BoundingBox(start, end=end)
 
   # TODO(timblakely): determine what other attributes we want to make mandatory for
@@ -191,8 +191,8 @@ def get_bounding_boxes_or_full(
     target_boxes = list(volume.bounding_boxes)
   else:
     target_boxes = [
-        bounding_box.BoundingBox([0, 0, 0], size=volume.volume_size)
+        bounding_box.BoundingBox([0, 0, 0], size=volume.volume_size)  # pyrefly: ignore[bad-argument-type]
     ]
   if not clip:
-    return target_boxes
-  return [volume.clip_box_to_volume(b) for b in target_boxes]
+    return target_boxes  # pyrefly: ignore[bad-return]
+  return [volume.clip_box_to_volume(b) for b in target_boxes]  # pyrefly: ignore[bad-argument-type]
