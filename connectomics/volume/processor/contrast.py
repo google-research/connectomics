@@ -65,7 +65,7 @@ class PlaneProcessor(subvolume_processor.SubvolumeProcessor):
     if mask is not None:
       mask = np.ascontiguousarray(np.transpose(mask, np.array(desired[1:]) - 1))
 
-    output_dtype = self.output_type(input_ndarray.dtype)
+    output_dtype = self.output_type(input_ndarray.dtype)  # pyrefly: ignore[bad-argument-type]
     if output_dtype == input_ndarray.dtype:
       output = transposed  # Process in place.
     else:

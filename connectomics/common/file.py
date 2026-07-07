@@ -69,7 +69,7 @@ def save_dataclass_json(
       json_path = f'/{json_path}'
     spec['json_pointer'] = json_path
   meta_ts = ts.open(spec).result()
-  meta_ts.write(dataclass_instance.to_dict()).result()
+  meta_ts.write(dataclass_instance.to_dict()).result()  # pyrefly: ignore[missing-attribute]
 
 
 @dataclasses.dataclass
@@ -183,7 +183,7 @@ class TensorStorePath:
   @property
   def source(self) -> TensorStoreDataSource:
     """Returns the source (kvstore-url) of the TensorStore."""
-    return TensorStoreDataSource(*self._parts[0].split('://', 1), self.adapters)
+    return TensorStoreDataSource(*self._parts[0].split('://', 1), self.adapters)  # pyrefly: ignore[bad-argument-count, bad-argument-type]
 
   @property
   def adapters(self) -> list[TensorStoreDataSourceAdapter]:
@@ -250,7 +250,7 @@ def dataclass_from_serialized(
   # Try to load the dataclass directly
   if not as_str.startswith('@'):
     try:
-      return target.from_json(serialized)
+      return target.from_json(serialized)  # pyrefly: ignore[missing-attribute]
     except json.JSONDecodeError:
       logging.warning(
           'Could not decode %s as JSON %s, trying to load as a path',
@@ -272,7 +272,7 @@ def load_json(
 ) -> dict[str, Any]:
   """Load a JSON object from a string or file path via TensorStore."""
   try:
-    return json.loads(json_or_path)
+    return json.loads(json_or_path)  # pyrefly: ignore[bad-argument-type]
   except json.JSONDecodeError:
     logging.warning(
         'Could not decode %s as JSON, trying to load as a path', json_or_path
@@ -306,7 +306,7 @@ def load_dataclass_json(
   Returns:
     New dataclass instance.
   """
-  return dataclass_type.from_dict(
+  return dataclass_type.from_dict(  # pyrefly: ignore[missing-attribute]
       load_json(path, json_path),
       infer_missing=infer_missing_fields,
   )
@@ -332,13 +332,13 @@ def load_dataclass(
   elif isinstance(v, str):
     try:
       # We attempt to parse first since file open ops can be expensive.
-      return constructor.from_json(v)
+      return constructor.from_json(v)  # pyrefly: ignore[missing-attribute]
     except json.JSONDecodeError:
       # File path; attempt to load.
       with Path(v).open() as f:
-        return constructor.from_json(f.read())
+        return constructor.from_json(f.read())  # pyrefly: ignore[missing-attribute]
   else:
-    return constructor.from_dict(typing.cast(dict[str, Any], v))
+    return constructor.from_dict(typing.cast(dict[str, Any], v))  # pyrefly: ignore[missing-attribute]
 
 
 def dataclass_loader(

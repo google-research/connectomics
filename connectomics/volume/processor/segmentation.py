@@ -88,7 +88,7 @@ class MergeInternalObjects(subvolume_processor.SubvolumeProcessor):
       mergeable_bcc_idx = set(range(len(bcc))) - border_bcc_idx
 
       # Find BBCs that can be collapsed and their new labels.
-      bcc_relabel = labels.merge_internal_objects(bcc, aps, mergeable_bcc_idx)
+      bcc_relabel = labels.merge_internal_objects(bcc, aps, mergeable_bcc_idx)  # pyrefly: ignore[bad-argument-type]
       relabel = {}
       for bcc_i, label in bcc_relabel.items():
         cc = bcc[bcc_i]

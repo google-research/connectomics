@@ -218,7 +218,7 @@ class CacheableModule(nn.Module):
 
   def _cached_result_or_none(self):
     if self.has_variable('cache', '__call__'):
-      logging.info('Using cached results for %r', self.scope.path_text)
+      logging.info('Using cached results for %r', self.scope.path_text)  # pyrefly: ignore[missing-attribute]
       v = self.get_variable('cache', '__call__')['0']
       if isinstance(v, dict):
         return tuple(v.values())

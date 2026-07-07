@@ -93,7 +93,7 @@ def train_flow_matching(
     Generated samples after training.
   """
   workdir = epath.Path(config.workdir) / f'{config.name_str}/'
-  log_dir = epath.Path(log_dir) / f'{config.name_str}/'
+  log_dir = epath.Path(log_dir) / f'{config.name_str}/'  # pyrefly: ignore[bad-assignment]
   logging.info('workdir: %s, log_dir: %s', workdir, log_dir)
   logging.info('JAX version: %s', jax.__version__)
   logging.info('JAXlib version: %s', jax.lib.__version__)
@@ -215,7 +215,7 @@ def train_flow_matching(
       step=0,
       params=params,
       ema_params=params,
-      batch_stats=batch_stats,
+      batch_stats=batch_stats,  # pyrefly: ignore[bad-argument-type]
       opt_state=optimizer.init(params),
       min_s_mmd_train=float('inf'),
   )
@@ -301,7 +301,7 @@ def train_flow_matching(
             items={'train_state': state},
         )['train_state']
         if config.get('load_optimizer_state', True):
-          state = state.replace(
+          state = state.replace(  # pyrefly: ignore[missing-attribute]
               step=0,
               params=restored_state.params,
               ema_params=restored_state.ema_params,
@@ -310,7 +310,7 @@ def train_flow_matching(
               min_s_mmd_train=float('inf'),
           )
         else:
-          state = state.replace(
+          state = state.replace(  # pyrefly: ignore[missing-attribute]
               step=0,
               params=restored_state.params,
               ema_params=restored_state.ema_params,
@@ -862,7 +862,7 @@ def train_flow_matching(
         if config.point_cond > 0:
           utils.log_point_cond(
               state,
-              cond,
+              cond,  # pyrefly: ignore[bad-argument-type]
               init_coord,
               init_feat,
               workdir,

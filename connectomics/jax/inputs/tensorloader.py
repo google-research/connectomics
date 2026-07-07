@@ -62,7 +62,7 @@ class BatchMetadata:
   ) -> T:
     indices = [record.record_key for record in records]
     rngs = [record.rng for record in records]
-    return cls(indices, rngs)
+    return cls(indices, rngs)  # pyrefly: ignore[bad-argument-type]
 
 
 class TensorSource:

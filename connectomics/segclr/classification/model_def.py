@@ -105,10 +105,10 @@ class DeepResNet(tf.keras.Model):
       raise NotImplementedError
 
     if self.dropout_rate > 0:
-      x = tf.keras.layers.Dropout(self.dropout_rate)(inputs, training=training)
+      x = tf.keras.layers.Dropout(self.dropout_rate)(inputs, training=training)  # pyrefly: ignore[not-callable]
 
     if self.num_layers > 0:
-      hidden = self.input_layer_train(inputs)
+      hidden = self.input_layer_train(inputs)  # pyrefly: ignore[not-callable]
 
       # RN block.This follows the RN-v2 design with full pre-activation
       for i in range(self.num_layers):
@@ -117,33 +117,33 @@ class DeepResNet(tf.keras.Model):
 
         # Dropout and BatchNorm
         if self.dropout_rate > 0:
-          x = tf.keras.layers.Dropout(self.dropout_rate)(x, training=training)
+          x = tf.keras.layers.Dropout(self.dropout_rate)(x, training=training)  # pyrefly: ignore[not-callable]
         if self.use_bn:
           x = self.bns_1[i](x, training=training)
 
         # Non-linearity 1 and dense layer 1
-        x = tf.keras.layers.ReLU()(x)
-        x = self.dense_layers_1[i](x)
+        x = tf.keras.layers.ReLU()(x)  # pyrefly: ignore[not-callable]
+        x = self.dense_layers_1[i](x)  # pyrefly: ignore[not-callable]
 
         # Dropout and BatchNorm
         if self.dropout_rate > 0:
-          x = tf.keras.layers.Dropout(self.dropout_rate)(x, training=training)
+          x = tf.keras.layers.Dropout(self.dropout_rate)(x, training=training)  # pyrefly: ignore[not-callable]
         if self.use_bn:
           x = self.bns_2[i](x, training=training)
 
         # Non-linearity 2 and dense layer 2
-        x = tf.keras.layers.ReLU()(x)
-        x = self.dense_layers_2[i](x)
+        x = tf.keras.layers.ReLU()(x)  # pyrefly: ignore[not-callable]
+        x = self.dense_layers_2[i](x)  # pyrefly: ignore[not-callable]
         hidden = x + hidden
     else:
       # Pass through for "linear" models
       hidden = inputs
 
-    return self.classifier(hidden)
+    return self.classifier(hidden)  # pyrefly: ignore[not-callable]
 
   def make_dense_layer(self, activation: str = "relu") -> tf.Tensor:
     """Uses the Dense layer as the hidden layer."""
-    return tf.keras.layers.Dense(
+    return tf.keras.layers.Dense(  # pyrefly: ignore[bad-return]
         self.num_hidden,
         kernel_initializer=None,
         activation=activation,
@@ -152,7 +152,7 @@ class DeepResNet(tf.keras.Model):
 
   def make_output_layer(self, num_classes: int) -> tf.Tensor:
     """Uses the Dense layer as the output layer."""
-    return tf.keras.layers.Dense(
+    return tf.keras.layers.Dense(  # pyrefly: ignore[bad-return]
         num_classes,
         kernel_regularizer=tf.keras.regularizers.l2(self.l2_reg)
         if self.l2_reg else None)
@@ -200,7 +200,7 @@ class DeepResNetSN(DeepResNet):
 
     dense_layer = super().make_dense_layer(activation=activation)
 
-    return ed.layers.SpectralNormalization(
+    return ed.layers.SpectralNormalization(  # pyrefly: ignore[bad-return]
         dense_layer, norm_multiplier=spec_norm_bound, iteration=1)
 
 
@@ -249,7 +249,7 @@ class DeepResNetGP(DeepResNet):
     logits, _ = super().call(inputs, training=training)
     return logits
 
-  def predict(self, inputs: tf.Tensor) -> tf.Tensor:
+  def predict(self, inputs: tf.Tensor) -> tf.Tensor:  # pyrefly: ignore[bad-override]
     """Short for call without training."""
     return super().call(inputs, training=False)
 
@@ -300,7 +300,7 @@ class DeepResNetSNGP(DeepResNetGP):
 
     dense_layer = super().make_dense_layer(activation=activation)
 
-    return ed.layers.SpectralNormalization(
+    return ed.layers.SpectralNormalization(  # pyrefly: ignore[bad-return]
         dense_layer, norm_multiplier=spec_norm_bound, iteration=1)
 
 

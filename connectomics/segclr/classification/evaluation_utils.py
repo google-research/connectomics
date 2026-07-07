@@ -139,8 +139,8 @@ def evaluate_prediction(labels_test: Sequence[int],
   """
   result_dict = {}
 
-  labels_test = np.array(labels_test)
-  pred_test = np.array(pred_test)
+  labels_test = np.array(labels_test)  # pyrefly: ignore[bad-assignment]
+  pred_test = np.array(pred_test)  # pyrefly: ignore[bad-assignment]
 
   if incl_per_class:
     for label in np.unique(labels_test):

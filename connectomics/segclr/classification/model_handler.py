@@ -150,12 +150,12 @@ def train_model(
       else:
         valid_weights = np.ones(len(valid_data))
 
-    fit_config["validation_data"] = (valid_data, valid_labels,
+    fit_config["validation_data"] = (valid_data, valid_labels,  # pyrefly: ignore[bad-assignment]
                                      valid_weights / np.mean(valid_weights))
   elif valid_split == 0:
     # Validate on the entire training set if no validation is given and
     # validation split was set to 0
-    fit_config["validation_data"] = (train_data, train_labels,
+    fit_config["validation_data"] = (train_data, train_labels,  # pyrefly: ignore[bad-assignment]
                                      train_weights / np.mean(train_weights))
 
   random_state = np.random.RandomState(random_seed)
@@ -207,7 +207,7 @@ def predict_data(
 
   for data_s in np.array_split(data, (len(data) // block_size) + 1):
     probas.extend(model.probas(data_s).numpy())
-    logits.extend(model(data_s).numpy())
+    logits.extend(model(data_s).numpy())  # pyrefly: ignore[not-callable]
 
     if predict_variances:
       variances.extend(model.variance(data_s).numpy())

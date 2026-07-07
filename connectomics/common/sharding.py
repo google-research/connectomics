@@ -20,5 +20,5 @@ def md5_shard(segment_id: int, num_shards: int, byteorder: str = 'little',
               bytewidth: int = 8) -> int:
   """A simple sharder based on md5 hashing."""
   md5 = hashlib.md5()
-  md5.update(segment_id.to_bytes(bytewidth, byteorder))
-  return int.from_bytes(md5.digest(), byteorder) % num_shards
+  md5.update(segment_id.to_bytes(bytewidth, byteorder))  # pyrefly: ignore[bad-argument-type]
+  return int.from_bytes(md5.digest(), byteorder) % num_shards  # pyrefly: ignore[bad-argument-type]

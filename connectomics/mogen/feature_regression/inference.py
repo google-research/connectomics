@@ -69,7 +69,7 @@ def main(_: Sequence[str]):
   )
 
   train_workdir = found_subdir
-  config_path = train_workdir / 'config.json'
+  config_path = train_workdir / 'config.json'  # pyrefly: ignore[unsupported-operation]
 
   logging.info('Loading train config from %s', config_path)
   with config_path.open('r') as f:
@@ -130,11 +130,11 @@ def main(_: Sequence[str]):
       step=0,
       params=params,
       ema_params=params,
-      batch_stats=batch_stats,
+      batch_stats=batch_stats,  # pyrefly: ignore[bad-argument-type]
       opt_state=opt_state,
   )
 
-  checkpoint_dir = train_workdir / 'checkpoints'
+  checkpoint_dir = train_workdir / 'checkpoints'  # pyrefly: ignore[unsupported-operation]
   checkpoint_manager = ocp.CheckpointManager(
       directory=checkpoint_dir,
       checkpointers={
@@ -166,7 +166,7 @@ def main(_: Sequence[str]):
         mutable=False,
         deterministic=True,
     )
-    return pred_feat
+    return pred_feat  # pyrefly: ignore[bad-return]
 
   p_generate = jax.jit(
       generate,

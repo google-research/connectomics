@@ -442,6 +442,6 @@ def model_gen(model_dir: str,
           mode=mode, train_op=train_op, loss=loss)
 
   if distance_bin_bounds is None:
-    distance_bin_bounds = [0, 1e12]
+    distance_bin_bounds = [0, 1e12]  # pyrefly: ignore[bad-assignment]
 
   return _model_fn

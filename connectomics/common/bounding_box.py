@@ -95,25 +95,25 @@ class BoundingBoxBase(Generic[T]):
                        f'Got {start=} and {end=}.')
 
     if array.is_arraylike(start):
-      start = np.asarray(start)
+      start = np.asarray(start)  # pyrefly: ignore[bad-assignment]
     if array.is_arraylike(end):
-      end = np.asarray(end)
+      end = np.asarray(end)  # pyrefly: ignore[bad-assignment]
 
     if size is not None:
       if array.is_arraylike(size):
-        size = np.asarray(size)
+        size = np.asarray(size)  # pyrefly: ignore[bad-assignment]
       else:
         param = start if start is not None else end
-        size = np.ones_like(param) * size
+        size = np.ones_like(param) * size  # pyrefly: ignore[bad-assignment]
       if start is not None:
-        end = start + size
+        end = start + size  # pyrefly: ignore[unsupported-operation]
       else:
-        start = end - size
+        start = end - size  # pyrefly: ignore[unsupported-operation]
     else:
-      size = end - start
+      size = end - start  # pyrefly: ignore[unsupported-operation]
 
-    object.__setattr__(self, '_start', self._tupleize(start))
-    object.__setattr__(self, '_size', self._tupleize(size))
+    object.__setattr__(self, '_start', self._tupleize(start))  # pyrefly: ignore[bad-argument-type]
+    object.__setattr__(self, '_size', self._tupleize(size))  # pyrefly: ignore[bad-argument-type]
 
     if len(self.start) != len(self.end) or len(self.end) != len(self.start):
       raise ValueError(
@@ -121,7 +121,7 @@ class BoundingBoxBase(Generic[T]):
           '%r vs. %r' % (self.start, self.end))
 
     if is_border_start is not None:
-      if len(is_border_start) != self.rank:
+      if len(is_border_start) != self.rank:  # pyrefly: ignore[bad-argument-type]
         raise ValueError(
             f'is_border_start needs to have exactly {self.rank} items')
       object.__setattr__(self, '_is_border_start',
@@ -130,7 +130,7 @@ class BoundingBoxBase(Generic[T]):
       object.__setattr__(self, '_is_border_start', tuple([False] * self.rank))
 
     if is_border_end is not None:
-      if len(is_border_end) != self.rank:
+      if len(is_border_end) != self.rank:  # pyrefly: ignore[bad-argument-type]
         raise ValueError(
             f'is_border_end needs to have exactly {self.rank} items')
       object.__setattr__(self, '_is_border_end',
@@ -138,7 +138,7 @@ class BoundingBoxBase(Generic[T]):
     else:
       object.__setattr__(self, '_is_border_end', tuple([False] * self.rank))
 
-  def __eq__(self: S, other: S) -> bool:
+  def __eq__(self: S, other: S) -> bool:  # pyrefly: ignore[bad-override]
     for k, v in self.__dict__.items():
       if k not in other.__dict__:
         return False
@@ -170,7 +170,7 @@ class BoundingBoxBase(Generic[T]):
     Returns:
       Tuple containing correctly typed values.
     """
-    return tuple(seq)
+    return tuple(seq)  # pyrefly: ignore[bad-return]
 
   def _as_ndarray(self: S, seq: Sequence[float]) -> np.ndarray:
     """Convert sequence to a correctly-typed ndarray.
@@ -235,16 +235,16 @@ class BoundingBoxBase(Generic[T]):
       ceiling-division.
     """
     if array.is_arraylike(scale_factor):
-      if len(scale_factor) != self.rank:
+      if len(scale_factor) != self.rank:  # pyrefly: ignore[bad-argument-type]
         raise ValueError(f'scale_factor {scale_factor} length does not match '
                          f'rank {self.rank}.')
-      scale_factor = np.array(scale_factor, dtype=float)
+      scale_factor = np.array(scale_factor, dtype=float)  # pyrefly: ignore[bad-assignment]
     start = np.array(self._start, dtype=float) * scale_factor
     size = np.array(self._size, dtype=float) * scale_factor
     if self.start.dtype == int:
       start = np.floor(start).astype(int)
       size = np.ceil(size).astype(int)
-    return self.__class__(start=start, size=size)
+    return self.__class__(start=start, size=size)  # pyrefly: ignore[bad-argument-type]
 
   def adjusted_by(self: S,
                   start: Optional[Union[T, Sequence[T]]] = None,
@@ -262,19 +262,19 @@ class BoundingBoxBase(Generic[T]):
       return self
 
     if start is None:
-      start = self.start
+      start = self.start  # pyrefly: ignore[bad-assignment]
     else:
-      if array.is_arraylike(start) and len(start) != self.rank:
+      if array.is_arraylike(start) and len(start) != self.rank:  # pyrefly: ignore[bad-argument-type]
         raise ValueError(f'start {start} length does not match rank '
                          f'{self.rank}.')
-      start = self.start + start
+      start = self.start + start  # pyrefly: ignore[bad-assignment]
 
     if end is None:
-      end = self.end
+      end = self.end  # pyrefly: ignore[bad-assignment]
     else:
-      if array.is_arraylike(end) and len(end) != self.rank:
+      if array.is_arraylike(end) and len(end) != self.rank:  # pyrefly: ignore[bad-argument-type]
         raise ValueError(f'end {end} length does not match rank {self.rank}.')
-      end = self.end + end
+      end = self.end + end  # pyrefly: ignore[bad-assignment]
     return self.__class__(start=start, end=end)
 
   def translate(self: S, offset: FloatSequence) -> S:
@@ -286,11 +286,11 @@ class BoundingBoxBase(Generic[T]):
     Returns:
       A new bounding box shifted by the specified vector.
     """
-    if array.is_arraylike(offset) and len(offset) != self.rank:
+    if array.is_arraylike(offset) and len(offset) != self.rank:  # pyrefly: ignore[bad-argument-type]
       raise ValueError(f'offset {offset} length does not match rank '
                        f'{self.rank}.')
     start = self.start + offset
-    return self.__class__(start=start, size=self.size)
+    return self.__class__(start=start, size=self.size)  # pyrefly: ignore[bad-argument-type]
 
   def intersection(self: S, other: S) -> Optional[S]:
     """Get the intersection with another bounding box, or None.
@@ -311,7 +311,7 @@ class BoundingBoxBase(Generic[T]):
     end = np.minimum(self.end, other.end)
     if np.any(end <= start):
       return None
-    return self.__class__(start=start, end=end)
+    return self.__class__(start=start, end=end)  # pyrefly: ignore[bad-argument-type]
 
   def hull(self: S, other: S) -> S:
     """Get the hull (minimum box enclosing) with another bounding box.
@@ -330,7 +330,7 @@ class BoundingBoxBase(Generic[T]):
                        f'{other.rank}.')
     start = np.minimum(self.start, other.start)
     end = np.maximum(self.end, other.end)
-    return self.__class__(start=start, end=end)
+    return self.__class__(start=start, end=end)  # pyrefly: ignore[bad-argument-type]
 
   def relative(self: S,
                start: Optional[Sequence[float]] = None,
@@ -362,23 +362,23 @@ class BoundingBoxBase(Generic[T]):
         return self
       else:
         if size is None:
-          return self.__class__(start=self.start, size=end)
+          return self.__class__(start=self.start, size=end)  # pyrefly: ignore[bad-argument-type]
         else:
-          start = self.start + end - size
+          start = self.start + end - size  # pyrefly: ignore[bad-assignment]
           return self.__class__(start=start, size=size)
     else:
       # start specified.
       if end is None:
         if size is None:
-          size = self.size - start
-        return self.__class__(start=np.add(self.start, start), size=size)
+          size = self.size - start  # pyrefly: ignore[bad-assignment]
+        return self.__class__(start=np.add(self.start, start), size=size)  # pyrefly: ignore[bad-argument-type]
       else:
         # end specified.
         if size is not None:
           raise ValueError(
               'size must not be specified if both start and end are given')
         return self.__class__(
-            start=np.add(self.start, start), size=np.subtract(end, start))
+            start=np.add(self.start, start), size=np.subtract(end, start))  # pyrefly: ignore[bad-argument-type]
 
   def to_slice_tuple(self,
                      start_dim: Optional[int] = None,
@@ -414,7 +414,7 @@ class BoundingBoxBase(Generic[T]):
     slices = self.to_slice_tuple(0, 3)
     if len(slices) < 3:
       slices = (slice(None, None, None),) * (3 - len(slices)) + slices
-    return slices
+    return slices  # pyrefly: ignore[bad-return]
 
   def to_slice4d(self) -> Tuple[slice, slice, slice, slice]:
     """Convenience function for 4d use.
@@ -429,7 +429,7 @@ class BoundingBoxBase(Generic[T]):
     slices = self.to_slice_tuple(0, 4)
     if len(slices) < 4:
       slices = (slice(None, None, None),) * (4 - len(slices)) + slices
-    return slices
+    return slices  # pyrefly: ignore[bad-return]
 
   def encompass(self: S, *boxes: S) -> S:
     """Return a new bounding box that contains this and all other boxes.
@@ -450,7 +450,7 @@ class BoundingBoxBase(Generic[T]):
     for box in boxes:
       start = np.minimum(start, box.start)
       end = np.maximum(end, box.end)
-    return self.__class__(start=start, end=end)
+    return self.__class__(start=start, end=end)  # pyrefly: ignore[bad-argument-type]
 
   def __repr__(self):
     return (f'{self.__class__.__name__}(start={self._start}, '
@@ -537,7 +537,7 @@ def containing(*boxes: S) -> S:
 
 def from_json(as_json: str) -> BoundingBoxBase:
   """Deserialize and guess bounding box type."""
-  bbox = BoundingBoxBase.from_json(as_json)
+  bbox = BoundingBoxBase.from_json(as_json)  # pyrefly: ignore[missing-attribute]
   if any([utils.is_floatlike(v) for v in bbox.start] +
          [utils.is_floatlike(v) for v in bbox.size]):
     return FloatBoundingBox(bbox.start, bbox.size)

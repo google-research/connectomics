@@ -82,8 +82,8 @@ def normalize_index(ind: IndexExpOrPointLookups,
     ind: Any = ind
     return ind
 
-  ind = [process_slice_ind(ind_i, lim_i) for ind_i, lim_i in zip(ind, limits)]
-  return tuple(ind)
+  ind = [process_slice_ind(ind_i, lim_i) for ind_i, lim_i in zip(ind, limits)]  # pyrefly: ignore[bad-argument-type, bad-assignment]
+  return tuple(ind)  # pyrefly: ignore[bad-return]
 
 
 def process_slice_ind(slice_ind: ArbitrarySlice, limit: int) -> slice:

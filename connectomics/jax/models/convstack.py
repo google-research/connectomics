@@ -153,8 +153,8 @@ class ResConvStack(nn.Module):
       ) / 2
       num_contractions = self.config.num_convs * (self.config.depth + 1)
       return BoundingBox(
-          input_box.start + num_contractions * single_conv_contraction,
-          input_box.size - 2 * num_contractions * single_conv_contraction,
+          input_box.start + num_contractions * single_conv_contraction,  # pyrefly: ignore[bad-argument-type]
+          input_box.size - 2 * num_contractions * single_conv_contraction,  # pyrefly: ignore[bad-argument-type]
       )
 
     # When padding, the output of the model results in the same location.
@@ -183,8 +183,8 @@ class ResConvStack(nn.Module):
       ) / 2
       num_contractions = self.config.num_convs * (self.config.depth + 1)
       return BoundingBox(
-          output_box.start - num_contractions * single_conv_contraction,
-          output_box.size + 2 * num_contractions * single_conv_contraction,
+          output_box.start - num_contractions * single_conv_contraction,  # pyrefly: ignore[bad-argument-type]
+          output_box.size + 2 * num_contractions * single_conv_contraction,  # pyrefly: ignore[bad-argument-type]
       )
 
     # When padding, the output of the model results in the same location.
@@ -209,7 +209,7 @@ class ResConvStack(nn.Module):
     output_box = bbox_calculator.compute_output_box_from_input_box(
         input_bounding_box
     )
-    return output_box.size
+    return output_box.size  # pyrefly: ignore[bad-return]
 
   def get_native_input_size(self) -> tuple[int, int, int] | None:
     return self.config.native_input_size

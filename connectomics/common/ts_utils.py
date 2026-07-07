@@ -32,7 +32,7 @@ def write_json(
       dict(
           driver='json',
           kvstore=kvstore,
-      ), context=context).result().write(to_write).result()
+      ), context=context).result().write(to_write).result()  # pyrefly: ignore[bad-argument-type]
   return to_write
 
 

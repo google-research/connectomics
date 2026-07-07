@@ -97,7 +97,7 @@ class RelativeAttentionBias(nn.Module):
         tile *= l
         biases.append(new_bias)
 
-    return sum(biases)
+    return sum(biases)  # pyrefly: ignore[bad-return]
 
   def relative_attn_bias(self, length, num_heads, name):
     """Computes attention bias based on relative positions.

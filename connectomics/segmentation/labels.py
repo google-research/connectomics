@@ -186,7 +186,7 @@ def watershed_expand(seg: np.ndarray,
   """
   # Map to low IDs for watershed to work.
   seg_low, orig_to_low = make_contiguous(seg)
-  dist_map = edt.edt(seg_low == 0, anisotropy=voxel_size[::-1])
+  dist_map = edt.edt(seg_low == 0, anisotropy=voxel_size[::-1])  # pyrefly: ignore[not-callable]
 
   if mask is None:
     mask = np.ones(seg_low.shape, dtype=bool)

@@ -169,7 +169,7 @@ def main(_: Sequence[str]):
       step=0,
       params=params,
       ema_params=params,
-      batch_stats=batch_stats,
+      batch_stats=batch_stats,  # pyrefly: ignore[bad-argument-type]
       opt_state=opt_state,
       min_s_mmd_train=float('inf'),
   )

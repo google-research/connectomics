@@ -102,7 +102,7 @@ class PadValues(grain.MapTransform):
   def map(self, features: FlatFeatures) -> FlatFeatures:
     for k in self.keys:
       if k not in features: continue
-      features[k] = np.pad(
+      features[k] = np.pad(  # pyrefly: ignore[no-matching-overload]
           features[k], pad_width=self.pad_width, mode=self.mode)
     return features
 
@@ -285,16 +285,16 @@ def _parse_single_preprocess_op(
 
   # Simple case without arguments.
   if isinstance(expr, ast.Name):
-    return op_class()
+    return op_class()  # pyrefly: ignore[missing-argument]
 
   assert isinstance(expr, ast.Call)
   args = [ast.literal_eval(arg) for arg in expr.args]
   kwargs = {kv.arg: ast.literal_eval(kv.value) for kv in expr.keywords}
   if not args:
-    return op_class(**kwargs)
+    return op_class(**kwargs)  # pyrefly: ignore[bad-unpacking, missing-argument]
 
   # Translate positional arguments into keyword arguments.
-  available_arg_names = [f.name for f in dataclasses.fields(op_class)]
+  available_arg_names = [f.name for f in dataclasses.fields(op_class)]  # pyrefly: ignore[bad-argument-type]
   for i, arg in enumerate(args):
     name = available_arg_names[i]
     if name in kwargs:
@@ -303,18 +303,18 @@ def _parse_single_preprocess_op(
           f'(value: {arg}) and keyword argument (value: {kwargs[name]}).')
     kwargs[name] = arg
 
-  return op_class(**kwargs)
+  return op_class(**kwargs)  # pyrefly: ignore[bad-unpacking, missing-argument]
 
 
 def parse(spec: str, available_ops: list[tuple[str, Any]]
           ) -> grain.Transformations:
   """Parses a preprocess spec; a '|' separated list of preprocess ops."""
-  available_ops = dict(available_ops)
+  available_ops = dict(available_ops)  # pyrefly: ignore[bad-assignment]
   if not spec.strip():
     transformations = []
   else:
     transformations = [
-        _parse_single_preprocess_op(s, available_ops)
+        _parse_single_preprocess_op(s, available_ops)  # pyrefly: ignore[bad-argument-type]
         for s in spec.split('|')
         if s.strip()
     ]

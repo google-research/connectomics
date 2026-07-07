@@ -28,7 +28,7 @@ FlagTypes = dict[str, bool | str | int | float | pathlib.Path]
 def flags_str(flags: Sequence[str] | None = None) -> str:
   if flags is None:
     return ''
-  return ' '.join(flags_array(flags))
+  return ' '.join(flags_array(flags))  # pyrefly: ignore[bad-argument-type]
 
 
 def flags_array(flags: FlagTypes | None = None) -> list[str]:

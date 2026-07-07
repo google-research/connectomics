@@ -173,12 +173,12 @@ def downsample_area(
   # The value computed in ret below corresponds to an output cropped by
   # scale - 1 on each side prior to striding, but we need the output to
   # be cropped by the context expected by the processor.
-  ret = query_integral_image(sliced_svt, diam=scale_zyx, stride=scale_zyx)
+  ret = query_integral_image(sliced_svt, diam=scale_zyx, stride=scale_zyx)  # pyrefly: ignore[bad-argument-type]
   if mask_svt is None:
     ret = ret / scale_vol
   else:
     missing = query_integral_image(
-        mask_svt, diam=scale_zyx, stride=scale_zyx
+        mask_svt, diam=scale_zyx, stride=scale_zyx  # pyrefly: ignore[bad-argument-type]
     )
     norm = np.clip(scale_vol - missing, 1, None)
     ret = ret / norm

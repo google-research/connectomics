@@ -281,11 +281,11 @@ def compute_loss(
     # TODO(riegerfr): minimize the corresponding path length
     # from x_t predict pred_x_1
     # coordinates are first 3 dims, then features
-    pred_x_1 = x_t[:, :, :3] + (1 - t_exp) * pred_dx_t[:, :, :3]
+    pred_x_1 = x_t[:, :, :3] + (1 - t_exp) * pred_dx_t[:, :, :3]  # pyrefly: ignore[bad-index]
     # compute squared dist of pred_x_1 and x_1
     dists = ((pred_x_1[:, :, None] - x_1[:, None, :, :3]) ** 2).sum(-1)
 
-    all_loss = ((dx_t[:, :, None] - pred_dx_t[:, None, :]) ** 2).sum(-1)
+    all_loss = ((dx_t[:, :, None] - pred_dx_t[:, None, :]) ** 2).sum(-1)  # pyrefly: ignore[bad-index]
 
     # take closest (along last axis)
     min_dists_src_tgt = jnp.argmin(
@@ -305,7 +305,7 @@ def compute_loss(
 
     elementwise_loss = loss_src_tgt + loss_tgt_src
   else:
-    elementwise_loss = (dx_t - pred_dx_t) ** 2
+    elementwise_loss = (dx_t - pred_dx_t) ** 2  # pyrefly: ignore[unsupported-operation]
 
     if point_cond_mask is not None:
       elementwise_loss = elementwise_loss * (~point_cond_mask[:, :, None])
@@ -427,7 +427,7 @@ def update_state(
 
   grad_fn = jax.grad(loss_fn, has_aux=True)
   grad, aux = grad_fn(state.params)
-  updates, new_opt_state = optimizer.update(grad, state.opt_state, state.params)
+  updates, new_opt_state = optimizer.update(grad, state.opt_state, state.params)  # pyrefly: ignore[bad-argument-type]
   new_params = optax.apply_updates(state.params, updates)
 
   # EMA from
@@ -442,7 +442,7 @@ def update_state(
   )
 
   return (
-      state.replace(
+      state.replace(  # pyrefly: ignore[missing-attribute]
           step=state.step + 1,
           params=new_params,
           opt_state=new_opt_state,
@@ -496,11 +496,11 @@ def guided_apply(
         feat=x_t[:, :, 3:] if x_t.shape[2] > 3 else None,
         t=t,
         mutable=False,
-        cond=jnp.zeros_like(cond),
+        cond=jnp.zeros_like(cond),  # pyrefly: ignore[bad-argument-type]
         point_cond_mask=point_cond_mask,
     )
-    pred = pred + guidance_scale[:, None, None] * (pred - pred_no_cond)
-  return pred
+    pred = pred + guidance_scale[:, None, None] * (pred - pred_no_cond)  # pyrefly: ignore[unsupported-operation]
+  return pred  # pyrefly: ignore[bad-return]
 
 
 def generate_step_midpoint(
@@ -705,7 +705,7 @@ def generate_samples(
 
   if noise is None:
     x_0 = jax.random.normal(
-        rng, (cond.shape[0] if cond is not None else n_samples, *sample_shape)
+        rng, (cond.shape[0] if cond is not None else n_samples, *sample_shape)  # pyrefly: ignore[bad-argument-type]
     )
     if use_class_noise and class_labels is not None:
       # Map 0/1 to -1/+1
@@ -892,7 +892,7 @@ def prep_data(
       coord, n_points
   )  # TODO(riegerfr): use rng here for additional augmentation
   feat = (
-      point.batch_lookup(feat, idx[..., None])[..., 0, :] if use_feat else None
+      point.batch_lookup(feat, idx[..., None])[..., 0, :] if use_feat else None  # pyrefly: ignore[bad-argument-type]
   )
 
   coord = reorder.reorder_named(coord, reorder_pc_type)
@@ -993,7 +993,7 @@ def plot_point_clouds(
   Returns:
     Plotly figure.
   """
-  data = np.asarray(data)
+  data = np.asarray(data)  # pyrefly: ignore[bad-assignment]
   if data.ndim == 2:
     data = data[None, ...]
 
@@ -1012,9 +1012,9 @@ def plot_point_clouds(
     points = data[i]
     if n_combine_samples > 1:
       combine_map = mogen_utils.get_combine_map(n_combine_samples, n_points)
-      unique_mask_values = np.unique(combine_map[i])
+      unique_mask_values = np.unique(combine_map[i])  # pyrefly: ignore[unsupported-operation]
       for mask_value in unique_mask_values:
-        mask_indices = np.where(combine_map[i] == mask_value)[0]
+        mask_indices = np.where(combine_map[i] == mask_value)[0]  # pyrefly: ignore[unsupported-operation]
         color_idx = (
             mask_value * color_map_multiplier if use_multiplier else mask_value
         )

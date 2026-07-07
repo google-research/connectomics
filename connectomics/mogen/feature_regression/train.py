@@ -134,17 +134,17 @@ def compute_feature_regression_loss(
         )
     )
 
-  loss = jnp.mean(jnp.square(pred_dx_t - feat))
+  loss = jnp.mean(jnp.square(pred_dx_t - feat))  # pyrefly: ignore[unsupported-operation]
 
-  norm_pred = jnp.linalg.norm(pred_dx_t[:, :, :3], axis=-1)
+  norm_pred = jnp.linalg.norm(pred_dx_t[:, :, :3], axis=-1)  # pyrefly: ignore[bad-index]
   norm_feat = jnp.linalg.norm(feat[:, :, :3], axis=-1)
   cosine_sim = jnp.mean(
-      jnp.sum(pred_dx_t[:, :, :3] * feat[:, :, :3], axis=-1)
+      jnp.sum(pred_dx_t[:, :, :3] * feat[:, :, :3], axis=-1)  # pyrefly: ignore[bad-index]
       # :3 for the vector feature
       / (norm_pred * norm_feat)
   )
 
-  last_mse = jnp.mean(jnp.square(pred_dx_t[:, :, 3:] - feat[:, :, 3:]))
+  last_mse = jnp.mean(jnp.square(pred_dx_t[:, :, 3:] - feat[:, :, 3:]))  # pyrefly: ignore[bad-index]
 
   pred_norm_mean = jnp.mean(norm_pred)
   pred_norm_std = jnp.std(norm_pred)
@@ -266,7 +266,7 @@ def train_feature_regression(
       step=0,
       params=params,
       ema_params=params,
-      batch_stats=batch_stats,
+      batch_stats=batch_stats,  # pyrefly: ignore[bad-argument-type]
       opt_state=optimizer.init(params),
   )
 
@@ -440,7 +440,7 @@ def train_feature_regression(
     for k, v in aux.items():
       if v is not None:
         log_dict['sum'][k] += v
-        log_dict['count'][k] += 1
+        log_dict['count'][k] += 1  # pyrefly: ignore[unsupported-operation]
 
     running_train_loss += aux['loss']
     running_train_loss_squared += aux['loss'] ** 2
@@ -560,4 +560,4 @@ def train_feature_regression(
   writer.close()
   latest_checkpoint_manager.wait_until_finished()
   best_checkpoint_manager.wait_until_finished()
-  return pred_init_feat
+  return pred_init_feat  # pyrefly: ignore[bad-return]

@@ -65,12 +65,12 @@ async def run_task(
   final_result = None
 
   finish = asyncio.create_task(proc.wait(), name='proc.wait')
-  stdout = asyncio.create_task(_read_stream(proc.stdout), name='stdout')
-  stderr = asyncio.create_task(_read_stream(proc.stderr), name='stderr')
+  stdout = asyncio.create_task(_read_stream(proc.stdout), name='stdout')  # pyrefly: ignore[bad-argument-type, bad-assignment]
+  stderr = asyncio.create_task(_read_stream(proc.stderr), name='stderr')  # pyrefly: ignore[bad-argument-type, bad-assignment]
 
   pending = False
   while not complete:
-    done, pending = await asyncio.wait(
+    done, pending = await asyncio.wait(  # pyrefly: ignore[bad-specialization]
         [finish, stdout, stderr], return_when=asyncio.FIRST_COMPLETED
     )
     for task in done:
@@ -80,18 +80,18 @@ async def run_task(
         logging.info('Result: %s', final_result)
         continue
 
-      result = task.result()
+      result = task.result()  # pyrefly: ignore[missing-attribute]
       if result is not None:
-        logging.info('%s: %s', task.get_name(), result)
-      if task.get_name() == 'stdout':
-        stdout = asyncio.create_task(_read_stream(proc.stdout), name='stdout')
+        logging.info('%s: %s', task.get_name(), result)  # pyrefly: ignore[missing-attribute]
+      if task.get_name() == 'stdout':  # pyrefly: ignore[missing-attribute]
+        stdout = asyncio.create_task(_read_stream(proc.stdout), name='stdout')  # pyrefly: ignore[bad-argument-type, bad-assignment]
       else:
-        stderr = asyncio.create_task(_read_stream(proc.stderr), name='stderr')
+        stderr = asyncio.create_task(_read_stream(proc.stderr), name='stderr')  # pyrefly: ignore[bad-argument-type, bad-assignment]
   if pending:
-    done, pending = await asyncio.wait(pending)
+    done, pending = await asyncio.wait(pending)  # pyrefly: ignore[bad-specialization]
     assert not pending
     for task in done:
-      logging.info('%s: %s', task.get_name(), task.result)
+      logging.info('%s: %s', task.get_name(), task.result)  # pyrefly: ignore[missing-attribute]
   if final_result != 0:
     raise RuntimeError(f'Failed with code {final_result}')
   return final_result

@@ -92,24 +92,24 @@ def _apply_pool(
 
   if pool_type == 'max':
     if mask is not None:
-      x = jnp.where(mask_expanded, x, -jnp.inf)
+      x = jnp.where(mask_expanded, x, -jnp.inf)  # pyrefly: ignore[unbound-name]
     return jnp.max(x, axis=-2)
   elif pool_type.startswith('l'):
     p = float(pool_type[1:])
     if mask is not None:
-      x = jnp.where(mask_expanded, x, 0.0)
+      x = jnp.where(mask_expanded, x, 0.0)  # pyrefly: ignore[unbound-name]
       count = jnp.maximum(jnp.sum(mask, axis=-1, keepdims=True), 1)
       return (jnp.sum(jnp.abs(x) ** p, axis=-2) / count + 1e-8) ** (1.0 / p)
     return (jnp.mean(jnp.abs(x) ** p, axis=-2) + 1e-8) ** (1.0 / p)
   elif pool_type == 'attention':
     attn = nn.Dense(1)(x)
     if mask is not None:
-      attn = jnp.where(mask_expanded, attn, -jnp.inf)
+      attn = jnp.where(mask_expanded, attn, -jnp.inf)  # pyrefly: ignore[unbound-name]
     attn = nn.softmax(attn, axis=-2)
     return jnp.sum(x * attn, axis=-2)
   else:
     if mask is not None:
-      x = jnp.where(mask_expanded, x, 0.0)
+      x = jnp.where(mask_expanded, x, 0.0)  # pyrefly: ignore[unbound-name]
       count = jnp.maximum(jnp.sum(mask, axis=-1, keepdims=True), 1)
       return jnp.sum(x, axis=-2) / count
     return jnp.mean(x, axis=-2)
@@ -536,7 +536,7 @@ class PointNeXtClassifier(nn.Module):
 
     x = PointNeXtEncoder(cfg.enc_config)(feat, coord)
 
-    x = _apply_pool(x, cfg.pool_type)
+    x = _apply_pool(x, cfg.pool_type)  # pyrefly: ignore[bad-argument-type]
     x_pooled = x
 
     norm = _get_norm(cfg.normalizer)

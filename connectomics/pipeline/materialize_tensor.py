@@ -106,12 +106,12 @@ def _get_box_generator(decorated_ts: ts.TensorStore,
                        max_box_bytes: int) -> box_generator.BoxGenerator:
   """Get BoxGenerator to process chunks compatible with input and output."""
   box_size = decorated_ts.chunk_layout.read_chunk.shape
-  box_bytes = np.prod(box_size) * decorated_ts.dtype.numpy_dtype.itemsize
+  box_bytes = np.prod(box_size) * decorated_ts.dtype.numpy_dtype.itemsize  # pyrefly: ignore[no-matching-overload]
   if box_bytes > max_box_bytes:
     raise ValueError(f'Too big a box: {box_bytes} > {max_box_bytes} bytes.')
   outer_box = bounding_box.BoundingBox(
       start=decorated_ts.origin, size=decorated_ts.shape)
-  return box_generator.BoxGenerator(outer_box, box_size=box_size)
+  return box_generator.BoxGenerator(outer_box, box_size=box_size)  # pyrefly: ignore[bad-argument-type]
 
 
 def materialize_subtensor(box_index: int, box_gen: box_generator.BoxGenerator,
@@ -130,7 +130,7 @@ def materialize_subtensor(box_index: int, box_gen: box_generator.BoxGenerator,
 
 
 @gin.configurable
-def run(input_spec: MutableJsonSpec = gin.REQUIRED,
+def run(input_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
         virtual_decorators: Sequence[decorators.Decorator] = (),
         max_box_bytes: int = int(4e9),
         pipeline_options: Optional[MutableJsonSpec] = None,
@@ -191,8 +191,8 @@ def run(input_spec: MutableJsonSpec = gin.REQUIRED,
   if pipeline_options is None:
     pipeline_options = {}
 
-  extra_flags = extra_flags if extra_flags is not None else {}
-  with flagsaver.flagsaver(**extra_flags):
+  extra_flags = extra_flags if extra_flags is not None else {}  # pyrefly: ignore[bad-assignment]
+  with flagsaver.flagsaver(**extra_flags):  # pyrefly: ignore[no-matching-overload]
     with beam.Pipeline(
         options=beam.options.pipeline_options.PipelineOptions.from_dictionary(
             pipeline_options)) as p:

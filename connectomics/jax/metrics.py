@@ -412,7 +412,7 @@ class Count(metrics.Metric):
   count: jnp.ndarray
 
   @classmethod
-  def from_model_output(
+  def from_model_output(  # pyrefly: ignore[bad-override]
       cls, inputs: jnp.ndarray, mask: jnp.ndarray | None = None, **_
   ) -> metrics.Metric:
     return cls(count=inputs.sum())
@@ -431,7 +431,7 @@ def create_classification_metrics(
 
   @flax.struct.dataclass
   class ClassificationMetrics(
-      metrics.CollectingMetric.from_outputs(('labels', 'logits'))
+      metrics.CollectingMetric.from_outputs(('labels', 'logits'))  # pyrefly: ignore[invalid-inheritance]
   ):
     """Computes precision, recall, F1, auc_pr and roc_auc per class.
 

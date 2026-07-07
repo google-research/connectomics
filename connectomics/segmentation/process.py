@@ -71,8 +71,8 @@ def compute_segmentation_props(
 
 
 @gin.configurable
-def analyze_segmentation(input_spec: MutableJsonSpec = gin.REQUIRED,
-                         output_path: str = gin.REQUIRED):
+def analyze_segmentation(input_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+                         output_path: str = gin.REQUIRED):  # pyrefly: ignore[bad-function-definition]
   """Analyzes segmentation.
 
   Computes per-segment properties and stores results as DataFrame.
@@ -108,9 +108,9 @@ def _erode(
 
 @gin.configurable
 def filter_labels(
-    input_spec: MutableJsonSpec = gin.REQUIRED,
-    output_spec: MutableJsonSpec = gin.REQUIRED,
-    query: str = gin.REQUIRED,
+    input_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+    output_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+    query: str = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
     relabel: bool = False,
     num_erosions: int = 0,
     erosions_min_voxels: int = 0,
@@ -158,9 +158,9 @@ def filter_labels(
 
 @gin.configurable
 def filter_mask(
-    input_spec: MutableJsonSpec = gin.REQUIRED,
-    output_spec: MutableJsonSpec = gin.REQUIRED,
-    query: str = gin.REQUIRED,
+    input_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+    output_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+    query: str = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
     num_iter_dilation: int = 0):
   """Filters a mask based on regionsprops query."""
   ds_in = ts.open(input_spec).result()
@@ -195,8 +195,8 @@ def recompute_connected_components(
 
 @gin.configurable
 def ingest_tiff_segmentation(
-    tiff_path: str = gin.REQUIRED,
-    output_spec: MutableJsonSpec = gin.REQUIRED,
+    tiff_path: str = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+    output_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
     offset: int = 0,
     transpose: bool = False):
   """Ingests segmentation from TIFF."""
@@ -215,8 +215,8 @@ def ingest_tiff_segmentation(
 
 @gin.configurable
 def write_boundary_mask_to_tensorstore(
-    output_spec: MutableJsonSpec = gin.REQUIRED,
-    shape: tuple[int, int, int] = gin.REQUIRED,
+    output_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+    shape: tuple[int, int, int] = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
     before_xyz: tuple[int, int, int] = (0, 0, 0),
     after_xyz: tuple[int, int, int] = (0, 0, 0)):
   """Writes a boundary mask volume to a TensorStore."""

@@ -155,7 +155,7 @@ def update_dataclass(
     else:
       params[k] = v
 
-  source = dataclasses.replace(source, **params)
+  source = dataclasses.replace(source, **params)  # pyrefly: ignore[bad-specialization]
   return source
 
 

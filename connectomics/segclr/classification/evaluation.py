@@ -151,12 +151,12 @@ def evaluate_train_test(labels_train: np.ndarray,
   result_dict["upsample_test"] = upsample_test
 
   if upsample_train:
-    train_idx = classifier_utils.upsample_labels(labels_train)
+    train_idx = classifier_utils.upsample_labels(labels_train)  # pyrefly: ignore[bad-argument-type]
     embeddings_train = embeddings_train[train_idx]
     labels_train = labels_train[train_idx]
 
   if upsample_test:
-    test_idx = classifier_utils.upsample_labels(labels_test)
+    test_idx = classifier_utils.upsample_labels(labels_test)  # pyrefly: ignore[bad-argument-type]
   else:
     test_idx = np.arange(len(labels_test))
 

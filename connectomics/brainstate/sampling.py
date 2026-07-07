@@ -82,7 +82,7 @@ class DatasetSplit:
       train_labels.append(self.train_labels)
       valid_labels.append(self.valid_labels)
       test_labels.append(self.test_labels)
-    return DatasetSplit(
+    return DatasetSplit(  # pyrefly: ignore[bad-return]
         np.concatenate(train_ids),
         np.concatenate(valid_ids),
         np.concatenate(test_ids),
@@ -170,16 +170,16 @@ def split_dataset_by_ratios(
   if labels is not None:
     if len(labels) != len(sample_ids):
       raise ValueError('labels must be of the same length as sample_ids')
-    labels = np.array(labels, dtype=int)
+    labels = np.array(labels, dtype=int)  # pyrefly: ignore[bad-assignment]
   else:
-    labels = np.zeros(len(sample_ids), dtype=int)
+    labels = np.zeros(len(sample_ids), dtype=int)  # pyrefly: ignore[bad-assignment]
 
   # Sort by cell id to make samples reproducible even if the samples are passed
   # in a different order
-  sample_ids = np.array(sample_ids, dtype=int)
+  sample_ids = np.array(sample_ids, dtype=int)  # pyrefly: ignore[bad-assignment]
   sample_id_sorting = np.argsort(sample_ids)
-  sample_ids = sample_ids[sample_id_sorting]
-  labels = labels[sample_id_sorting]
+  sample_ids = sample_ids[sample_id_sorting]  # pyrefly: ignore[bad-index]
+  labels = labels[sample_id_sorting]  # pyrefly: ignore[bad-index, unsupported-operation]
   rng = np.random.RandomState(seed)
   split_indices = split_indices_by_labels(labels, ratios, rng)
 

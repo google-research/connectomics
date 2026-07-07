@@ -163,7 +163,7 @@ class PointInfinity(nn.Module):
       combine_map = utils.get_combine_map(
           self.config.n_combine_samples, coord.shape[1]
       )
-      combine_map = combine_map[..., None]
+      combine_map = combine_map[..., None]  # pyrefly: ignore[unsupported-operation]
       combine_map = jnp.repeat(combine_map, x.shape[0], axis=0)
       x = jnp.concatenate((x, combine_map), axis=-1)
 

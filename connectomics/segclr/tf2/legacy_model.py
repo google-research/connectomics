@@ -60,7 +60,7 @@ def restore_legacy_model(chkpt_path: str) -> LegacySegClrModel:
   mock_input = tf.keras.Input(
       shape=(129, 129, 129, 1), batch_size=32, dtype=tf.float32
   )
-  _ = legacy_model(mock_input)
+  _ = legacy_model(mock_input)  # pyrefly: ignore[not-callable]
 
   # Load checkpoint
   ckpt = tf.train.Checkpoint(legacy_model)

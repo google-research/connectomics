@@ -34,14 +34,14 @@ def upsample_labels(labels: Sequence[int],
     resampled_idx: array of resampled indices
   """
   if label_idx is None:
-    label_idx = np.arange(len(labels))
+    label_idx = np.arange(len(labels))  # pyrefly: ignore[bad-assignment]
   else:
     if len(label_idx) != len(labels):
       raise ValueError(
           "labels and label_idx need to be of same length. "
           f"Currently is {len(labels)} and {len(label_idx)} respectively."
       )
-    label_idx = np.asarray(label_idx)
+    label_idx = np.asarray(label_idx)  # pyrefly: ignore[bad-assignment]
 
   labels_unique, label_counts = np.unique(labels, return_counts=True)
   max_label_count = np.max(label_counts)
@@ -49,7 +49,7 @@ def upsample_labels(labels: Sequence[int],
   resampled_idx = []
   for u_class in labels_unique:
     resampled_idx.extend(
-        upsample_data(label_idx[labels == u_class], max_label_count))
+        upsample_data(label_idx[labels == u_class], max_label_count))  # pyrefly: ignore[bad-argument-type, unsupported-operation]
   return np.array(resampled_idx)
 
 

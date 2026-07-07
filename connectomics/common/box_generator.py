@@ -46,7 +46,7 @@ class BoxGeneratorBase:
   def index_to_cropped_box(self, intindex: int) -> bounding_box.BoundingBox:
     raise NotImplementedError()
 
-  def __eq__(self: 'BoxGeneratorBase', other: 'BoxGeneratorBase') -> bool:
+  def __eq__(self: 'BoxGeneratorBase', other: 'BoxGeneratorBase') -> bool:  # pyrefly: ignore[bad-override]
     for k, v in self.__dict__.items():
       if k not in other.__dict__:
         return False
@@ -206,8 +206,8 @@ class BoxGenerator(BoxGeneratorBase):
     if self.back_shift_small_boxes:
       start = np.maximum(self.outer_box.start, end - self.box_size)
     is_start, is_end = self.tag_border_locations(index)
-    return coords, self.outer_box.__class__(
-        start=start, end=end, is_border_start=is_start, is_border_end=is_end)
+    return coords, self.outer_box.__class__(  # pyrefly: ignore[bad-return]
+        start=start, end=end, is_border_start=is_start, is_border_end=is_end)  # pyrefly: ignore[bad-argument-type]
 
   # TODO(timblakely): replace usage cases where callers subsequently call
   # np.unravel
@@ -250,13 +250,13 @@ class BoxGenerator(BoxGeneratorBase):
     return box.adjusted_by(start=front, end=-back)
 
   def box_coordinate_to_index(self, point: Sequence[int]) -> BoxIndex:
-    point = np.array(point)
-    if np.any(point < 0) or np.any(point >= self.output.size):
+    point = np.array(point)  # pyrefly: ignore[bad-assignment]
+    if np.any(point < 0) or np.any(point >= self.output.size):  # pyrefly: ignore[unsupported-operation]
       raise ValueError(
           'point must be between the origin and the output_shape: %r versus %r'
           % (point, self.output.size)
       )
-    return np.ravel_multi_index(point, dims=self.output.size, order='F')
+    return np.ravel_multi_index(point, dims=self.output.size, order='F')  # pyrefly: ignore[bad-return]
 
   def offset_to_index(
       self, index: BoxIndex, offset: Sequence[int]
@@ -283,7 +283,7 @@ class BoxGenerator(BoxGeneratorBase):
     if np.any(index_box_coord < 0) or np.any(
         index_box_coord >= self.boxes_per_dim):
       return None
-    return self.box_coordinate_to_index(index_box_coord)
+    return self.box_coordinate_to_index(index_box_coord)  # pyrefly: ignore[bad-argument-type]
 
   def spatial_point_to_box_coordinates(
       self, point: Sequence[float]
@@ -374,7 +374,7 @@ class BoxGenerator(BoxGeneratorBase):
     coords_xyz = np.unravel_index(index, self.output.size, order='F')
     is_start = np.array(coords_xyz) == 0
     is_end = coords_xyz == self.output.size - 1
-    return is_start, is_end
+    return is_start, is_end  # pyrefly: ignore[bad-return]
 
   def overlapping_subboxes(
       self,
@@ -407,8 +407,8 @@ class BoxGenerator(BoxGeneratorBase):
             continue
 
           _, sub_box = self._generate(idx)
-          if box.intersection(sub_box) is not None:
-            yield sub_box
+          if box.intersection(sub_box) is not None:  # pyrefly: ignore[bad-argument-type]
+            yield sub_box  # pyrefly: ignore[invalid-yield]
 
 
 GeneratorIndex = TypeVar('GeneratorIndex', bound=int)
@@ -460,7 +460,7 @@ class MultiBoxGenerator(BoxGeneratorBase):
         'generators',
         [
             BoxGenerator(
-                outer_box,
+                outer_box,  # pyrefly: ignore[bad-argument-type]
                 self.box_size,
                 self.box_overlap,
                 self.back_shift_small_boxes,
@@ -498,7 +498,7 @@ class MultiBoxGenerator(BoxGeneratorBase):
       raise ValueError('Invalid multi_box_index: %d' % multi_box_index)
     generator_index = bisect.bisect_right(self.prefix_sums[1:], multi_box_index)
     index = multi_box_index - self.prefix_sums[generator_index]
-    return generator_index, index
+    return generator_index, index  # pyrefly: ignore[bad-return]
 
   def generate(self, multi_box_index: MultiBoxIndex) -> IndexedBoundingBox:
     """Translates linear index to sub box.
@@ -554,7 +554,7 @@ def from_json(as_json: str) -> BoxGeneratorBase:
   """Deserialize and guess generator type."""
   as_dict = json.loads(as_json)
   if 'outer_box' in as_dict:
-    return BoxGenerator.from_dict(as_dict)
+    return BoxGenerator.from_dict(as_dict)  # pyrefly: ignore[missing-attribute]
   elif 'outer_boxes' in as_dict:
-    return MultiBoxGenerator.from_dict(as_dict)
+    return MultiBoxGenerator.from_dict(as_dict)  # pyrefly: ignore[missing-attribute]
   raise ValueError('Not a known box generator type')
