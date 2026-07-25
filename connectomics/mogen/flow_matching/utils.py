@@ -320,12 +320,12 @@ def compute_loss(
     dx_t_neg_reshaped = jnp.roll(dx_t_reshaped, shift=1, axis=1)
     dx_t_neg = dx_t_neg_reshaped.reshape(dx_t.shape)
 
-    loss_neg = (dx_t_neg - pred_dx_t) ** 2
+    loss_neg = (dx_t_neg - pred_dx_t) ** 2  # pyrefly: ignore[unsupported-operation]
     loss_neg = loss_neg.mean(axis=range(1, len(x_1.shape)))
     elementwise_loss = elementwise_loss - lambda_cfm * loss_neg
 
   if lambda_cond > 0:
-    pred_x_1 = x_t + (1 - t_exp) * pred_dx_t
+    pred_x_1 = x_t + (1 - t_exp) * pred_dx_t  # pyrefly: ignore[unsupported-operation]
     pred_coord = pred_x_1[:, :, :3]
 
     aux_loss = compute_aux_loss(coord, pred_coord, use_mst=use_mst)

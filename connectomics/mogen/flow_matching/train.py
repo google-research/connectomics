@@ -780,9 +780,9 @@ def train_flow_matching(
       multihost_utils.process_allgather(jax.numpy.array(0))
       logging.debug('debug: Completed all-gather barrier.')
       if config.train_set == 'pos_neg':
-        config_pos = ml_collections.ConfigDict(config)
+        config_pos = ml_collections.ConfigDict(config)  # pyrefly: ignore[bad-argument-type]
         config_pos.train_set = 'train'
-        config_neg = ml_collections.ConfigDict(config)
+        config_neg = ml_collections.ConfigDict(config)  # pyrefly: ignore[bad-argument-type]
         config_neg.train_set = 'axons_negative'
 
         class_labels_gathered = jnp.concatenate(
