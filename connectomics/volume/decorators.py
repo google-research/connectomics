@@ -973,7 +973,7 @@ class MaxProjection(Projection):
                projection_dim: int,
                context_spec: Optional[MutableJsonSpec] = None):
     super().__init__(
-        projection_fn=np.nanmax,
+        projection_fn=np.nanmax,  # pyrefly: ignore[bad-argument-type]
         projection_dim=projection_dim,
         context_spec=context_spec)
 
@@ -986,7 +986,7 @@ class MeanProjection(Projection):
                projection_dim: int,
                context_spec: Optional[MutableJsonSpec] = None):
     super().__init__(
-        projection_fn=np.nanmean,
+        projection_fn=np.nanmean,  # pyrefly: ignore[bad-argument-type]
         projection_dim=projection_dim,
         context_spec=context_spec)
 
@@ -999,7 +999,7 @@ class StdProjection(Projection):
                projection_dim: int,
                context_spec: Optional[MutableJsonSpec] = None):
     super().__init__(
-        projection_fn=np.nanstd,
+        projection_fn=np.nanstd,  # pyrefly: ignore[bad-argument-type]
         projection_dim=projection_dim,
         context_spec=context_spec)
 
@@ -1012,7 +1012,7 @@ class SumProjection(Projection):
                projection_dim: int,
                context_spec: Optional[MutableJsonSpec] = None):
     super().__init__(
-        projection_fn=np.nansum,
+        projection_fn=np.nansum,  # pyrefly: ignore[bad-argument-type]
         projection_dim=projection_dim,
         context_spec=context_spec)
 
