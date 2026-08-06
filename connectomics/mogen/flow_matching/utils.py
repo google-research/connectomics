@@ -1779,7 +1779,7 @@ def compute_metrics(
   mmd_train_sub = distance.mmd(embs_gen[:, :8], embs_train[:, :8])
   mmd_val_sub = distance.mmd(embs_gen[:, :8], embs_val[:, :8])
 
-  return mmd_train, mmd_val, fid_train, fid_val, mmd_train_sub, mmd_val_sub
+  return mmd_train, mmd_val, fid_train, fid_val, mmd_train_sub, mmd_val_sub  # pyrefly: ignore[bad-return]
 
 
 def save_point_clouds_svg(
