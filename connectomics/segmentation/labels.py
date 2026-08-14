@@ -41,11 +41,12 @@ def relabel(labels: np.ndarray, orig_ids: Iterable[int],
   new_ids = np.asarray(new_ids)
   assert orig_ids.size == new_ids.size
 
-  relabel_hashtable = {
-      new_id: orig_id for new_id, orig_id in zip(orig_ids, new_ids)
-  }
-  relabeled = [relabel_hashtable[l] for l in labels.flatten()]
-  return np.asarray(relabeled).reshape(labels.shape)
+  sort_idx = np.argsort(orig_ids)
+  sorted_orig_ids = orig_ids[sort_idx]
+  sorted_new_ids = new_ids[sort_idx]
+
+  idx = np.searchsorted(sorted_orig_ids, labels)
+  return sorted_new_ids[idx]
 
 
 def make_contiguous(
