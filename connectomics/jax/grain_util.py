@@ -78,7 +78,7 @@ class ExpandDims(grain.MapTransform):
   def map(self, features: FlatFeatures) -> FlatFeatures:
     for k in self.keys:
       if k not in features: continue
-      features[k] = np.expand_dims(features[k], axis=self.axis)
+      features[k] = np.expand_dims(features[k], axis=self.axis)  # pyrefly: ignore[no-matching-overload]
     return features
 
 
