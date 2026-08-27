@@ -26,6 +26,7 @@ from clu import platform
 import jax
 import jax.numpy as jnp
 import ml_collections
+from ml_collections import config_flags
 import numpy as np
 import optax
 import tensorflow as tf
@@ -205,7 +206,7 @@ class StepTraceContextHelper:
 
 def define_training_flags():
   """Defines standard flags used for model training."""
-  ml_collections.config_flags.DEFINE_config_file(
+  config_flags.DEFINE_config_file(
       "config", None, "Training configuration.", lock_config=True
   )
   flags.DEFINE_string("workdir", None, "Work unit directory.")
