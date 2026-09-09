@@ -306,7 +306,7 @@ def _process_planes_nd(
   with it:
     idx = [slice(None) for _ in range(num_dim)]
     for _ in it:
-      for i, b in enumerate(batch_dims):  # pyrefly: ignore[bad-argument-type]
+      for i, b in enumerate(batch_dims):  # pyrefly: ignore[bad-argument-type, not-iterable]
         idx[b] = list(it.multi_index)[i]  # pyrefly: ignore[unsupported-operation]
       output[tuple(idx)] = processor(
           data_view[tuple(idx + [...])].squeeze(), **processor_args)[...]

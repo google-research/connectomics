@@ -66,7 +66,7 @@ def make_contiguous(
   """
   orig_ids = np.unique(np.append(labels, np.uint64(0)))
   new_ids = np.arange(len(orig_ids))
-  return relabel(labels, orig_ids, new_ids), list(zip(orig_ids, new_ids))
+  return relabel(labels, orig_ids, new_ids), list(zip(orig_ids, new_ids))  # pyrefly: ignore[bad-return]
 
 
 def are_equivalent(label_a: np.ndarray, label_b: np.ndarray) -> bool:
