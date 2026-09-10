@@ -36,6 +36,9 @@ def relabel(labels: np.ndarray, orig_ids: Iterable[int],
 
   Returns:
     int64 ndarray with updated segment IDs
+
+  Raises:
+    KeyError: If a segment ID in `labels` is missing from `orig_ids`.
   """
   orig_ids = np.asarray(orig_ids)
   new_ids = np.asarray(new_ids)
@@ -46,6 +49,15 @@ def relabel(labels: np.ndarray, orig_ids: Iterable[int],
   sorted_new_ids = new_ids[sort_idx]
 
   idx = np.searchsorted(sorted_orig_ids, labels)
+  if labels.size:
+    if not sorted_orig_ids.size:
+      raise KeyError(labels.flat[0])
+    # An insertion point is not necessarily an exact match. Clip the lookup
+    # so IDs above the mapping range are also reported as missing.
+    mapped_ids = sorted_orig_ids[np.minimum(idx, sorted_orig_ids.size - 1)]
+    missing = mapped_ids != labels
+    if np.any(missing):
+      raise KeyError(labels[missing].flat[0])
   return sorted_new_ids[idx]
 
 

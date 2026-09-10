@@ -15,6 +15,7 @@
 """Tests for labels."""
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from connectomics.segmentation import labels
 import numpy as np
 
@@ -32,6 +33,40 @@ class SplitDisconnectedComponentsTest(absltest.TestCase):
                           [0, 0, 0, 4],
                           [0, 5, 5, 5]]], dtype=np.uint64)
     self.assertTrue(labels.are_equivalent(new_labels, expected))
+
+
+class RelabelTest(parameterized.TestCase):
+
+  @parameterized.product(unknown_id=[0, 2, 4], shape=[(), (1,), (2, 3)])
+  def test_rejects_unmapped_ids(self, unknown_id, shape):
+    original = np.full(shape, unknown_id, dtype=np.uint64)
+    with self.assertRaises(KeyError) as error:
+      labels.relabel(original, [3, 1], [30, 10])
+    self.assertEqual(error.exception.args[0], unknown_id)
+
+  @parameterized.parameters((), (1,), (2, 3))
+  def test_rejects_empty_mapping(self, *shape):
+    original = np.full(shape, 7, dtype=np.uint64)
+    with self.assertRaises(KeyError) as error:
+      labels.relabel(original, [], [])
+    self.assertEqual(error.exception.args[0], 7)
+
+  @parameterized.parameters(False, True)
+  def test_empty_labels(self, empty_mapping):
+    original = np.empty((2, 0, 3), dtype=np.uint64)
+    orig_ids = np.array([] if empty_mapping else [3, 1], dtype=np.uint64)
+    new_ids = np.array([] if empty_mapping else [30, 10], dtype=np.int64)
+    result = labels.relabel(original, orig_ids, new_ids)
+    self.assertEqual(result.shape, original.shape)
+    self.assertEqual(result.dtype, new_ids.dtype)
+
+  def test_preserves_large_uint64_ids(self):
+    orig_ids = np.array([2**63 + 3, 2**63 + 1], dtype=np.uint64)
+    new_ids = np.array([7, 5], dtype=np.int64)
+    original = orig_ids[[1, 0, 1, 0]].reshape(2, 2)
+    result = labels.relabel(original, orig_ids, new_ids)
+    np.testing.assert_array_equal(result, [[5, 7], [5, 7]])
+    self.assertEqual(result.dtype, new_ids.dtype)
 
 
 class UtilsTest(absltest.TestCase):
@@ -63,7 +98,7 @@ class UtilsTest(absltest.TestCase):
     original = np.random.choice(orig_ids, size=100)
     relabeled = labels.relabel(original, orig_ids, new_ids)
 
-    self.assertTrue(np.all(relabeled[original == (2 << 60)] == 1))
+    self.assertTrue(np.all(relabeled[original == (2 << 40)] == 1))
     self.assertTrue(np.all(relabeled[original == 100000] == 2))
     self.assertTrue(np.all(relabeled[original == 30] == 3))
 
