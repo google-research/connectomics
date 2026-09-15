@@ -195,7 +195,7 @@ def dot_product_attention(
     bias_kv: jnp.ndarray | None = None,
     broadcast_dropout: bool = True,
     dropout_rate: float = 0.1,
-    dtype: jnp.dtype = jnp.float32,
+    dtype: jnp.dtype = jnp.float32,  # pyrefly: ignore[bad-function-definition]
     precision: jax.lax.Precision | None = None,
     deterministic: bool,
     dropout_rng: jnp.ndarray | None = None,
