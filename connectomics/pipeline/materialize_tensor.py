@@ -130,7 +130,7 @@ def materialize_subtensor(box_index: int, box_gen: box_generator.BoxGenerator,
 
 
 @gin.configurable
-def run(input_spec: MutableJsonSpec = gin.REQUIRED,  # pyrefly: ignore[bad-function-definition]
+def run(input_spec: MutableJsonSpec = gin.REQUIRED,
         virtual_decorators: Sequence[decorators.Decorator] = (),
         max_box_bytes: int = int(4e9),
         pipeline_options: Optional[MutableJsonSpec] = None,
