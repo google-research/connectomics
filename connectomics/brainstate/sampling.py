@@ -181,10 +181,10 @@ def split_dataset_by_ratios(
   sample_ids = sample_ids[sample_id_sorting]  # pyrefly: ignore[bad-index]
   labels = labels[sample_id_sorting]  # pyrefly: ignore[bad-index, unsupported-operation]
   rng = np.random.RandomState(seed)
-  split_indices = split_indices_by_labels(labels, ratios, rng)
+  split_indices = split_indices_by_labels(labels, ratios, rng)  # pyrefly: ignore[bad-argument-type]
 
-  sample_id_splits = [sample_ids[s] for s in split_indices]
-  label_splits = [labels[s] for s in split_indices]
+  sample_id_splits = [sample_ids[s] for s in split_indices]  # pyrefly: ignore[bad-index]
+  label_splits = [labels[s] for s in split_indices]  # pyrefly: ignore[bad-index, unsupported-operation]
   return DatasetMultiSplit(sample_id_splits, label_splits)
 
 
