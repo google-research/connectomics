@@ -25,7 +25,7 @@ def get_timestep_embedding(
     timesteps: jnp.ndarray,
     embedding_dim: int,
     max_time: float = 1.0,
-    dtype: jnp.dtype = jnp.float32,
+    dtype: jnp.dtype = jnp.float32,  # pyrefly: ignore[bad-function-definition]
 ) -> jnp.ndarray:
   """Builds sinusoidal embeddings for time.
 
