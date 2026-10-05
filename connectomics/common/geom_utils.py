@@ -117,7 +117,8 @@ def downsample_area(
     svt: [z, y, x] summed-volume table for the data to downsample
     box: bounding box from which the source data was originates
     scale: xyz downsampling factors
-    dtype: data type for the output array
+    dtype: data type for the output array. Floating-point outputs retain
+      fractional averages; other output types are rounded before casting.
     mask_svt: [z, y, x] summed-volume table for the mask
 
   Returns:
@@ -184,7 +185,9 @@ def downsample_area(
     ret = ret / norm
     ret[missing == scale_vol] = np.nan
 
-  ret = np.round(ret).astype(dtype)
+  if not np.issubdtype(dtype, np.floating):
+    ret = np.round(ret)
+  ret = ret.astype(dtype)
   out_box = bounding_box.BoundingBox(
       start=(box.start + off) // scale, size=ret.shape[::-1]
   )
