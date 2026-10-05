@@ -279,7 +279,7 @@ def train_feature_regression(
       directory=workdir / 'checkpoints',
       checkpointers={
           'train_state': ocp.AsyncCheckpointer(ocp.PyTreeCheckpointHandler()),
-          'train_iter': ocp.Checkpointer(grain.OrbaxCheckpointHandler()),  # pytype:disable=wrong-arg-types
+          'train_iter': ocp.Checkpointer(grain.OrbaxCheckpointHandler()),  # pyrefly: ignore[bad-argument-type]
       },
       options=ocp.CheckpointManagerOptions(max_to_keep=3),
   )  # to restore after preemption

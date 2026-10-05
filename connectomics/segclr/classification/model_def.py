@@ -69,7 +69,7 @@ class DeepResNet(tf.keras.Model):
     self.input_layer_notrain = tf.keras.layers.Dense(
         self.num_hidden, trainable=False)
     self.dense_layers_1 = [
-        self.make_dense_layer(activation=None) for _ in range(num_layers)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
+        self.make_dense_layer(activation=None) for _ in range(num_layers)  # pyrefly: ignore[bad-argument-type]
     ]
     self.bns_1 = [
         tf.keras.layers.BatchNormalization(
@@ -77,7 +77,7 @@ class DeepResNet(tf.keras.Model):
         for _ in range(num_layers)
     ]
     self.dense_layers_2 = [
-        self.make_dense_layer(activation=None) for _ in range(num_layers)  # pytype: disable=wrong-arg-types  # always-use-return-annotations
+        self.make_dense_layer(activation=None) for _ in range(num_layers)  # pyrefly: ignore[bad-argument-type]
     ]
     self.bns_2 = [
         tf.keras.layers.BatchNormalization(
@@ -105,10 +105,10 @@ class DeepResNet(tf.keras.Model):
       raise NotImplementedError
 
     if self.dropout_rate > 0:
-      x = tf.keras.layers.Dropout(self.dropout_rate)(inputs, training=training)  # pyrefly: ignore[not-callable]
+      x = tf.keras.layers.Dropout(self.dropout_rate)(inputs, training=training)
 
     if self.num_layers > 0:
-      hidden = self.input_layer_train(inputs)  # pyrefly: ignore[not-callable]
+      hidden = self.input_layer_train(inputs)
 
       # RN block.This follows the RN-v2 design with full pre-activation
       for i in range(self.num_layers):
@@ -117,22 +117,22 @@ class DeepResNet(tf.keras.Model):
 
         # Dropout and BatchNorm
         if self.dropout_rate > 0:
-          x = tf.keras.layers.Dropout(self.dropout_rate)(x, training=training)  # pyrefly: ignore[not-callable]
+          x = tf.keras.layers.Dropout(self.dropout_rate)(x, training=training)
         if self.use_bn:
           x = self.bns_1[i](x, training=training)
 
         # Non-linearity 1 and dense layer 1
-        x = tf.keras.layers.ReLU()(x)  # pyrefly: ignore[not-callable]
+        x = tf.keras.layers.ReLU()(x)
         x = self.dense_layers_1[i](x)  # pyrefly: ignore[not-callable]
 
         # Dropout and BatchNorm
         if self.dropout_rate > 0:
-          x = tf.keras.layers.Dropout(self.dropout_rate)(x, training=training)  # pyrefly: ignore[not-callable]
+          x = tf.keras.layers.Dropout(self.dropout_rate)(x, training=training)
         if self.use_bn:
           x = self.bns_2[i](x, training=training)
 
         # Non-linearity 2 and dense layer 2
-        x = tf.keras.layers.ReLU()(x)  # pyrefly: ignore[not-callable]
+        x = tf.keras.layers.ReLU()(x)
         x = self.dense_layers_2[i](x)  # pyrefly: ignore[not-callable]
         hidden = x + hidden
     else:

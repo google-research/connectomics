@@ -207,7 +207,7 @@ def predict_data(
 
   for data_s in np.array_split(data, (len(data) // block_size) + 1):
     probas.extend(model.probas(data_s).numpy())
-    logits.extend(model(data_s).numpy())  # pyrefly: ignore[not-callable]
+    logits.extend(model(data_s).numpy())
 
     if predict_variances:
       variances.extend(model.variance(data_s).numpy())

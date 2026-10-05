@@ -69,7 +69,7 @@ def save_dataclass_json(
       json_path = f'/{json_path}'
     spec['json_pointer'] = json_path
   meta_ts = ts.open(spec).result()
-  meta_ts.write(dataclass_instance.to_dict()).result()  # pyrefly: ignore[missing-attribute]
+  meta_ts.write(dataclass_instance.to_dict()).result()
 
 
 @dataclasses.dataclass
@@ -250,7 +250,7 @@ def dataclass_from_serialized(
   # Try to load the dataclass directly
   if not as_str.startswith('@'):
     try:
-      return target.from_json(serialized)  # pyrefly: ignore[missing-attribute]
+      return target.from_json(serialized)
     except json.JSONDecodeError:
       logging.warning(
           'Could not decode %s as JSON %s, trying to load as a path',
@@ -306,7 +306,7 @@ def load_dataclass_json(
   Returns:
     New dataclass instance.
   """
-  return dataclass_type.from_dict(  # pyrefly: ignore[missing-attribute]
+  return dataclass_type.from_dict(
       load_json(path, json_path),
       infer_missing=infer_missing_fields,
   )
@@ -332,13 +332,13 @@ def load_dataclass(
   elif isinstance(v, str):
     try:
       # We attempt to parse first since file open ops can be expensive.
-      return constructor.from_json(v)  # pyrefly: ignore[missing-attribute]
+      return constructor.from_json(v)
     except json.JSONDecodeError:
       # File path; attempt to load.
       with Path(v).open() as f:
-        return constructor.from_json(f.read())  # pyrefly: ignore[missing-attribute]
+        return constructor.from_json(f.read())
   else:
-    return constructor.from_dict(typing.cast(dict[str, Any], v))  # pyrefly: ignore[missing-attribute]
+    return constructor.from_dict(typing.cast(dict[str, Any], v))
 
 
 def dataclass_loader(

@@ -75,7 +75,7 @@ class AbsoluteSubvolumeIndexer:
       stop = min(stop, self._subvol.bbox.end[2 - i])
       new_slice = slice(start, stop)
       adjusted.append(new_slice)
-    return self._subvol[adjusted]  # pytype: disable=unsupported-operands  # dynamic-method-lookup
+    return self._subvol[adjusted]  # pyrefly: ignore[bad-index]
 
 
 class Subvolume:

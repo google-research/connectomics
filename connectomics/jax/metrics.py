@@ -129,7 +129,7 @@ class PerStepAverage(metrics.Metric):
     assert mask is None, 'Mask not supported'
     batch, timesteps = values.shape[:2]
     total = values.reshape(batch, timesteps, -1).sum(axis=(0, 2))
-    return cls(total=total, count=batch)  # pytype: disable=wrong-arg-types  # jnp-array
+    return cls(total=total, count=batch)  # pyrefly: ignore[bad-argument-type]
 
   def merge(self, other: Any) -> Any:
     return type(self)(

@@ -90,7 +90,7 @@ def analyze_segmentation(input_spec: MutableJsonSpec = gin.REQUIRED,
   logging.info(df.head())
 
   with file.Path(output_path).open('w') as fh:
-    df.to_json(fh)  # pytype: disable=wrong-arg-types  # pandas-drop-duplicates-overloads
+    df.to_json(fh)
 
 
 def _erode(

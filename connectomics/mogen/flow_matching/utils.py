@@ -552,7 +552,7 @@ def generate_step_midpoint(
   dt = t_end - t_start
   dt_exp = jnp.expand_dims(dt, range(1, len(x_t.shape)))
   # Using explicit midpoint ODE solver.
-  x_mid = x_t + pred_start * dt_exp / 2  # pytype: disable=unsupported-operands  # jax-operator-types
+  x_mid = x_t + pred_start * dt_exp / 2  # pyrefly: ignore[unsupported-operation]
   if point_cond_mask is not None:
     x_mid = (
         x_mid * (~point_cond_mask[:, :, None])
@@ -568,7 +568,7 @@ def generate_step_midpoint(
       guidance_scale=guidance_scale,
       guide=guide,
   )
-  pred_end = x_t + dt_exp * pred_mid  # pytype: disable=unsupported-operands  # jax-operator-types
+  pred_end = x_t + dt_exp * pred_mid  # pyrefly: ignore[unsupported-operation]
   if point_cond_mask is not None:
     pred_end = (
         pred_end * (~point_cond_mask[:, :, None])
@@ -615,7 +615,7 @@ def generate_step_rk4(
 
   k1 = f(x_t, t_start)
 
-  x_t_k2 = x_t + k1 * dt_exp / 2  # pytype: disable=unsupported-operands  # jax-operator-types
+  x_t_k2 = x_t + k1 * dt_exp / 2
   if point_cond_mask is not None:
     x_t_k2 = (
         x_t_k2 * (~point_cond_mask[:, :, None])
@@ -623,7 +623,7 @@ def generate_step_rk4(
     )
   k2 = f(x_t_k2, t_start + dt / 2)
 
-  x_t_k3 = x_t + k2 * dt_exp / 2  # pytype: disable=unsupported-operands  # jax-operator-types
+  x_t_k3 = x_t + k2 * dt_exp / 2
   if point_cond_mask is not None:
     x_t_k3 = (
         x_t_k3 * (~point_cond_mask[:, :, None])
@@ -631,7 +631,7 @@ def generate_step_rk4(
     )
   k3 = f(x_t_k3, t_start + dt / 2)
 
-  x_t_k4 = x_t + k3 * dt_exp  # pytype: disable=unsupported-operands  # jax-operator-types
+  x_t_k4 = x_t + k3 * dt_exp
   if point_cond_mask is not None:
     x_t_k4 = (
         x_t_k4 * (~point_cond_mask[:, :, None])
@@ -639,7 +639,7 @@ def generate_step_rk4(
     )
   k4 = f(x_t_k4, t_end)
 
-  pred_end = x_t + (k1 + 2 * k2 + 2 * k3 + k4) * dt_exp / 6  # pytype: disable=unsupported-operands  # jax-operator-types
+  pred_end = x_t + (k1 + 2 * k2 + 2 * k3 + k4) * dt_exp / 6
   if point_cond_mask is not None:
     pred_end = (
         pred_end * (~point_cond_mask[:, :, None])
@@ -1753,7 +1753,7 @@ def compute_metrics(
   """
   batch_size = min(4, cfg.batch_size)
   embs_gen = jax.numpy.concatenate([
-      simple_embs(x_gen[i * batch_size : (i + 1) * batch_size], mst)  # pytype: disable=wrong-arg-types
+      simple_embs(x_gen[i * batch_size : (i + 1) * batch_size], mst)
       for i in range(x_gen.shape[0] // batch_size)
   ])
 
@@ -1764,7 +1764,7 @@ def compute_metrics(
 
   assert embs_train.shape[1] == embs_val.shape[1] == embs_gen.shape[1]
   if norm_std:
-    train_std = embs_train.std(axis=0, keepdims=True)  # pytype: disable=attribute-error
+    train_std = embs_train.std(axis=0, keepdims=True)
     embs_gen = embs_gen / train_std
     embs_train = embs_train / train_std
     embs_val = embs_val / train_std
@@ -1779,7 +1779,7 @@ def compute_metrics(
   mmd_train_sub = distance.mmd(embs_gen[:, :8], embs_train[:, :8])
   mmd_val_sub = distance.mmd(embs_gen[:, :8], embs_val[:, :8])
 
-  return mmd_train, mmd_val, fid_train, fid_val, mmd_train_sub, mmd_val_sub  # pyrefly: ignore[bad-return]
+  return mmd_train, mmd_val, fid_train, fid_val, mmd_train_sub, mmd_val_sub
 
 
 def save_point_clouds_svg(

@@ -47,7 +47,7 @@ class TensorstoreMetadata(utils.NPDataClassJsonMixin):
 
   def __post_init__(self):
     # Purely to ensure that voxel_size is a tuple if initialized with a list.
-    self.voxel_size = tuple(self.voxel_size)  # pyrefly: ignore[bad-assignment]
+    self.voxel_size = tuple(self.voxel_size)
 
 
 @dataclasses.dataclass(eq=True)

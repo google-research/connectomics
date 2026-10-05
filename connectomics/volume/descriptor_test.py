@@ -114,7 +114,7 @@ class DescriptorTest(absltest.TestCase):
 
     expected_desc = descriptor.VolumeDescriptor(
         decorator_specs=[], tensorstore_config=expected_desc)
-    original_desc = dataclasses.replace(  # pytype: disable=wrong-arg-types  # dataclasses-replace-types
+    original_desc = dataclasses.replace(
         expected_desc, tensorstore_config=tmp_config_file)
 
     desc = descriptor.VolumeDescriptor.from_json(original_desc.to_json())
@@ -139,7 +139,7 @@ class DescriptorTest(absltest.TestCase):
 
     original_desc = descriptor.VolumeDescriptor(
         decorator_specs=[],
-        tensorstore_config=tsv.TensorstoreConfig(  # pytype: disable=wrong-arg-types
+        tensorstore_config=tsv.TensorstoreConfig(
             spec=spec, metadata=tmp_metadata_file))
 
     desc = descriptor.VolumeDescriptor.from_json(original_desc.to_json())
@@ -167,12 +167,12 @@ class DescriptorTest(absltest.TestCase):
       f.write(expected_metadata.to_json())
 
     tmp_config_file = os.path.join(FLAGS.test_tmpdir, 'config.json')
-    intermediate_config = tsv.TensorstoreConfig(  # pytype: disable=wrong-arg-types
+    intermediate_config = tsv.TensorstoreConfig(
         spec=spec, metadata=tmp_metadata_file)
     with open(tmp_config_file, 'w') as f:
       f.write(intermediate_config.to_json())
 
-    original_desc = descriptor.VolumeDescriptor(  # pytype: disable=wrong-arg-types
+    original_desc = descriptor.VolumeDescriptor(
         decorator_specs=[], tensorstore_config=tmp_config_file)
 
     desc = descriptor.VolumeDescriptor.from_json(original_desc.to_json())

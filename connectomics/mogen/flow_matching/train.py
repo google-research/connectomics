@@ -235,7 +235,7 @@ def train_flow_matching(
           'train_state': ocp.AsyncCheckpointer(
               ocp.PyTreeCheckpointHandler(use_ocdbt=True, use_zarr3=True)
           ),
-          'train_iter': ocp.Checkpointer(grain.OrbaxCheckpointHandler()),  # pytype:disable=wrong-arg-types
+          'train_iter': ocp.Checkpointer(grain.OrbaxCheckpointHandler()),  # pyrefly: ignore[bad-argument-type]
       },
       options=ocp.CheckpointManagerOptions(
           max_to_keep=3, cleanup_tmp_directories=True
