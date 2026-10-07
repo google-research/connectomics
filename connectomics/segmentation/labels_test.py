@@ -15,6 +15,7 @@
 """Tests for labels."""
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from connectomics.segmentation import labels
 import numpy as np
 
@@ -86,6 +87,66 @@ class UtilsTest(absltest.TestCase):
                                           np.unique(eroded))).reshape(seg.shape)
     expanded, _ = labels.watershed_expand(seg, voxel_size=(1, 1, 1))
     np.testing.assert_array_equal(expanded[large_enough], seg[large_enough])
+
+
+class ContiguousIntegerPrecisionTest(parameterized.TestCase):
+
+  @parameterized.parameters(
+      (np.int64, [0, 2**53, 2**53 + 1, 2**53 + 2]),
+      (np.int64, [2**63 - 3, 2**63 - 2, 2**63 - 1]),
+      (np.uint64, [0, 2**64 - 3, 2**64 - 2, 2**64 - 1]),
+      (np.int32, [0, 2**31 - 2, 2**31 - 1]),
+      (np.int8, [0, 1, 127]),
+  )
+  def test_distinct_integer_ids_and_exact_mapping(self, dtype, ids):
+    # Exercise a read-only, non-contiguous input with repeated IDs.
+    original = np.tile(np.asarray(ids, dtype=dtype), (2, 2))[:, ::-1]
+    original.setflags(write=False)
+    before = original.copy()
+    compacted, mapping = labels.make_contiguous(original)
+    ordered = sorted({0, *(int(v) for v in original.flat)})
+    expected_map = [(old, new) for new, old in enumerate(ordered)]
+    self.assertEqual([(int(a), int(b)) for a, b in mapping], expected_map)
+    self.assertTrue(all(np.issubdtype(type(a), np.integer) for a, _ in mapping))
+    lookup = dict(expected_map)
+    expected = np.asarray([lookup[int(v)] for v in original.flat]).reshape(
+        original.shape
+    )
+    np.testing.assert_array_equal(compacted, expected)
+    self.assertTrue(labels.are_equivalent(original, compacted))
+    reverse = {int(new): int(old) for old, new in mapping}
+    restored = np.asarray(
+        [reverse[int(v)] for v in compacted.flat], dtype=dtype
+    )
+    np.testing.assert_array_equal(restored.reshape(original.shape), original)
+    np.testing.assert_array_equal(original, before)
+
+  @parameterized.parameters(
+      (np.int64, (0, 2)),
+      (np.uint64, (0, 2)),
+      (np.int64, (2, 3)),
+      (np.uint8, (2, 3)),
+  )
+  def test_empty_and_background_only_inputs(self, dtype, shape):
+    original = np.zeros(shape, dtype=dtype)
+    result, mapping = labels.make_contiguous(original)
+    np.testing.assert_array_equal(result, original)
+    self.assertEqual([(int(a), int(b)) for a, b in mapping], [(0, 0)])
+    self.assertTrue(np.issubdtype(type(mapping[0][0]), np.integer))
+
+  def test_watershed_round_trip_preserves_large_signed_seed_ids(self):
+    original = np.zeros((1, 1, 7), dtype=np.int64)
+    original[0, 0, 1] = 2**53
+    original[0, 0, 5] = 2**53 + 1
+    before = original.copy()
+    expanded, distances = labels.watershed_expand(
+        original, voxel_size=(1, 1, 1)
+    )
+    self.assertEqual(int(expanded[0, 0, 1]), 2**53)
+    self.assertEqual(int(expanded[0, 0, 5]), 2**53 + 1)
+    self.assertEqual({int(v) for v in np.unique(expanded)}, {2**53, 2**53 + 1})
+    np.testing.assert_array_equal(distances[original != 0], 0)
+    np.testing.assert_array_equal(original, before)
 
 
 if __name__ == '__main__':

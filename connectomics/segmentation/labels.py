@@ -64,7 +64,7 @@ def make_contiguous(
       ndarray of dense segment IDs
       list of (old_id, new_id) pairs
   """
-  orig_ids = np.unique(np.append(labels, np.uint64(0)))
+  orig_ids = np.unique(np.append(labels, np.zeros((), dtype=labels.dtype)))
   new_ids = np.arange(len(orig_ids))
   return relabel(labels, orig_ids, new_ids), list(zip(orig_ids, new_ids))  # pyrefly: ignore[bad-return]
 
