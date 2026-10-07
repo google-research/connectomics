@@ -130,5 +130,5 @@ def center_crop_bounding_box(
   cropping_offsets = (original_box.size - final_size_xyz) // 2
   new_start = jnp.asarray(original_box.start) + cropping_offsets
   return bounding_box.BoundingBox(
-      start=tuple(new_start), size=tuple(final_size_xyz)
+      start=tuple(new_start), size=tuple(final_size_xyz)  # pyrefly: ignore[bad-argument-type]
   )
