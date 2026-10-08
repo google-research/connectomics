@@ -48,18 +48,32 @@ def reorder_axis(pc: jax.Array, axis_index: int) -> jax.Array:
 def reorder_z_sfc(
     pc: jax.Array,
 ) -> jax.Array:
-  """Reorders a point cloud using Z-order-like Space-Filling Curve sorting.
+  """Reorders a point cloud using Z-order Space-Filling Curve sorting.
 
-  Args:
-    pc: Batched point cloud of shape (batch_size, point_cloud_size,
-      feature_dimension). Assumes point_cloud_size is a power of 2.
-
-  Returns:
-    Reordered batched point cloud of the same shape.
+  Supports both power-of-2 point counts (recursive median bisection) and
+  arbitrary non-power-of-2 chunk sizes (e.g. octree chunks 56, 448, 3584 or
+  first-256 remainder 7936) via 10-bit 3D Morton bit-interleaving.
   """
-  depth = int(np.log2(pc.shape[1]))
   batch_size, point_cloud_size, feature_dim = pc.shape
+  if point_cloud_size <= 1:
+    return pc
+  if (point_cloud_size & (point_cloud_size - 1)) != 0:
+    xyz = pc[..., :3]
+    lo = jnp.min(xyz, axis=1, keepdims=True)
+    hi = jnp.max(xyz, axis=1, keepdims=True)
+    norm = (xyz - lo) / jnp.maximum(hi - lo, 1e-6)
+    c = jnp.clip(jnp.floor(norm * 1023.0), 0, 1023).astype(jnp.uint32)
+    x, y, z = c[..., 0], c[..., 1], c[..., 2]
+    m = jnp.zeros_like(x)
+    for bit in range(9, -1, -1):
+      bx = (x >> bit) & jnp.uint32(1)
+      by = (y >> bit) & jnp.uint32(1)
+      bz = (z >> bit) & jnp.uint32(1)
+      m = (m << jnp.uint32(3)) | (bx << jnp.uint32(2)) | (by << jnp.uint32(1)) | bz
+    order = jnp.argsort(m, axis=1)
+    return jnp.take_along_axis(pc, order[..., None], axis=1)
 
+  depth = int(np.log2(point_cloud_size))
   current_pc = pc
   for d in range(depth):
     num_sections = 2**d
@@ -258,11 +272,44 @@ def reorder_named(coord: jax.Array, name: str) -> jax.Array:
     recursive = True
   else:
     recursive = False
+  octree = '_octree' in name
   if '_first_' in name:
     first_n = int(name.split('_first_')[-1].split('_')[0])
   else:
     first_n = 0
-  return reorder(coord, base_method, max_dist, recursive, first_n)
+  return reorder(coord, base_method, max_dist, recursive, first_n, octree=octree)
+
+
+@jax.jit
+def reorder_hilbert_sfc(pc: jax.Array) -> jax.Array:
+  """Reorders a batched 3D point cloud (B, N, D>=3) along a 10-bit 3D Hilbert curve."""
+  xyz = pc[..., :3]
+  lo = jnp.min(xyz, axis=1, keepdims=True)
+  hi = jnp.max(xyz, axis=1, keepdims=True)
+  norm = (xyz - lo) / jnp.maximum(hi - lo, 1e-6)
+  c = jnp.clip(jnp.floor(norm * 1023.0), 0, 1023).astype(jnp.uint32)
+  x, y, z = c[..., 0], c[..., 1], c[..., 2]
+  for s in (512, 256, 128, 64, 32, 16, 8, 4, 2):
+    u = jnp.uint32(s)
+    m = jnp.uint32(s - 1)
+    p = jnp.where((x & u) != 0, m, jnp.uint32(0))
+    x = x ^ p
+    q = jnp.where((y & u) != 0, m, (x ^ y) & m)
+    x = x ^ q
+    y = y ^ jnp.where((y & u) != 0, jnp.uint32(0), q)
+    r = jnp.where((z & u) != 0, m, (x ^ z) & m)
+    x = x ^ r
+    z = z ^ jnp.where((z & u) != 0, jnp.uint32(0), r)
+  h = jnp.zeros_like(x)
+  for bit in range(9, -1, -1):
+    bx = (x >> bit) & jnp.uint32(1)
+    by = (y >> bit) & jnp.uint32(1)
+    bz = (z >> bit) & jnp.uint32(1)
+    h = (h << jnp.uint32(3)) | (bx << jnp.uint32(2)) | (by << jnp.uint32(1)) | bz
+  for shift in (16, 8, 4, 2, 1):
+    h = h ^ (h >> jnp.uint32(shift))
+  order = jnp.argsort(h, axis=1)
+  return jnp.take_along_axis(pc, order[..., None], axis=1)
 
 
 def reorder(
@@ -271,6 +318,7 @@ def reorder(
     max_dist: bool = True,
     recursive: bool = False,
     first_n: int = 0,
+    octree: bool = False,
 ) -> jax.Array:
   """Reorders points based on a named reordering method.
 
@@ -280,6 +328,7 @@ def reorder(
     max_dist: Whether to order by max distance.
     recursive: Whether to reorder recursively.
     first_n: Number of points to reorder first.
+    octree: Whether to split FPS order into 8^1, 8^2, 8^3, 8^4, ... octree stages.
 
   Returns:
     Reordered point cloud.
@@ -293,7 +342,7 @@ def reorder(
 
   reorder_fn = {
       'z': reorder_z_sfc,
-      # TODO(riegerfr): add hilbert
+      'hilbert': reorder_hilbert_sfc,
       'origin': reorder_distance_from_origin,
       'revorigin': lambda x: reorder_distance_from_origin(x, reverse=True),
       'centroid': reorder_distance_from_centroid,
@@ -313,6 +362,17 @@ def reorder(
         ),
         axis=1,
     )
+  elif octree:
+    assert base_method != 'fps', 'fps cannot be used with octree'
+    coord = reorder_origin_fps(coord, closest_to_origin=not max_dist)
+    n_pts = coord.shape[1]
+    cuts = [c for c in (8, 64, 512, 4096) if c < n_pts]
+    newcoord = jnp.concatenate(
+        [reorder_fn(chunk) for chunk in jnp.split(coord, cuts, axis=1)],
+        axis=1,
+    )
+    assert newcoord.shape == coord.shape
+    coord = newcoord
   elif recursive:
     assert base_method != 'fps', 'fps cannot be used with recursive'
     coord = reorder_origin_fps(coord, closest_to_origin=not max_dist)

@@ -57,21 +57,24 @@ class PointInfinityBlock(nn.Module):
       self,
       x,
       z,
+      deterministic: bool = True,
   ):
     # TODO(riegerfr): ablate norms + their initialization
     z = z + vit.MultiHeadDotProductAttention(
         num_heads=self.config.n_heads,
         normalize_qk=True,
         dtype=self.config.dtype,
+        dropout_rate=self.config.dropout,
     )(
         nn.RMSNorm(dtype=self.config.dtype)(z),
         nn.RMSNorm(dtype=self.config.dtype)(x),
+        deterministic=deterministic,
     )
     z = z + (
         vit.MlpBlock(
             dropout=self.config.dropout,
             dtype=self.config.dtype,
-        )(nn.RMSNorm(dtype=self.config.dtype)(z), None, True)
+        )(nn.RMSNorm(dtype=self.config.dtype)(z), None, deterministic)
     )
 
     for _ in range(self.config.n_subblocks):
@@ -80,13 +83,15 @@ class PointInfinityBlock(nn.Module):
           num_heads=self.config.n_heads,
           normalize_qk=True,
           dtype=self.config.dtype,
+          dropout_rate=self.config.dropout,
       )(
           z_normed,
           z_normed,
+          deterministic=deterministic,
       )
       z = z + (
           vit.MlpBlock(dropout=self.config.dropout, dtype=self.config.dtype)(
-              nn.RMSNorm(dtype=self.config.dtype)(z), None, True
+              nn.RMSNorm(dtype=self.config.dtype)(z), None, deterministic
           )
       )
 
@@ -94,13 +99,15 @@ class PointInfinityBlock(nn.Module):
         num_heads=self.config.n_heads,
         normalize_qk=True,
         dtype=self.config.dtype,
+        dropout_rate=self.config.dropout,
     )(
         nn.RMSNorm(dtype=self.config.dtype)(x),
         nn.RMSNorm(dtype=self.config.dtype)(z),
+        deterministic=deterministic,
     )
     x = x + (
         vit.MlpBlock(dropout=self.config.dropout, dtype=self.config.dtype)(
-            nn.RMSNorm(dtype=self.config.dtype)(x), None, True
+            nn.RMSNorm(dtype=self.config.dtype)(x), None, deterministic
         )
     )
     return x, z
@@ -216,17 +223,26 @@ class PointInfinity(nn.Module):
     z = jnp.concat((z, t_emb[:, None, :]), axis=1) if t_emb is not None else z
     z = jnp.concat((z, cond[:, None, :]), axis=1) if cond is not None else z
 
-    remat_fn = nn.remat if self.config.remat else lambda x: x
-    for _ in range(self.config.n_blocks):
+    block_cls = (
+        nn.remat(PointInfinityBlock, static_argnums=(3,))  # pyrefly: ignore[bad-specialization]
+        if self.config.remat
+        else PointInfinityBlock
+    )
+    for i in range(self.config.n_blocks):
       if self.config.use_gemma:
         # pylint: disable=g-import-not-at-top
         from connectomics.mogen.models import gemma_pointinfinity
 
-        x, z = remat_fn(gemma_pointinfinity.GemmaPointInfinityBlock)(
-            self.config
-        )(x, z)
+        g_cls = (
+            nn.remat(gemma_pointinfinity.GemmaPointInfinityBlock)  # pyrefly: ignore[bad-specialization]
+            if self.config.remat
+            else gemma_pointinfinity.GemmaPointInfinityBlock
+        )
+        x, z = g_cls(self.config, name=f'GemmaPointInfinityBlock_{i}')(x, z)
       else:
-        x, z = remat_fn(PointInfinityBlock)(self.config)(x, z)
+        x, z = block_cls(
+            self.config, name=f'PointInfinityBlock_{i}'
+        )(x, z, deterministic)
 
     x = nn.Dense(
         (
