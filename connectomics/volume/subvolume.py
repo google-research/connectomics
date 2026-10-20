@@ -51,7 +51,7 @@ class RelativeSubvolumeIndexer:
     return Subvolume(
         new_data,
         self._subvol.bbox.__class__(
-            start=self._subvol.start + offset[3:0:-1],
+            start=self._subvol.start + offset[3:0:-1],  # pyrefly: ignore[bad-argument-type]
             size=new_data.shape[3:0:-1]))
 
 

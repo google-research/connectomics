@@ -166,7 +166,7 @@ class BoxGenerator(BoxGeneratorBase):
         self,
         'output',
         bounding_box.BoundingBox(
-            start=([0] * output_shape.size), size=output_shape
+            start=([0] * output_shape.size), size=output_shape  # pyrefly: ignore[bad-argument-type]
         ),
     )
     object.__setattr__(self, 'squeeze', np.asarray(squeeze))

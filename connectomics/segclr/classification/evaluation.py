@@ -213,8 +213,8 @@ def evaluate_train_test(labels_train: np.ndarray,
 
     pred_test = np.argmax(probas_test, axis=1)
     result_dicts_rand_states.append(
-        evaluation_utils.evaluate_prediction(labels_test[test_idx],
-                                             pred_test[test_idx]))
+        evaluation_utils.evaluate_prediction(labels_test[test_idx],  # pyrefly: ignore[bad-argument-type]
+                                             pred_test[test_idx]))  # pyrefly: ignore[bad-argument-type]
 
   for k in result_dicts_rand_states[0]:
     result_dict[k] = np.mean([r[k] for r in result_dicts_rand_states])

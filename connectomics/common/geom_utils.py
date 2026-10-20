@@ -186,7 +186,7 @@ def downsample_area(
 
   ret = np.round(ret).astype(dtype)
   out_box = bounding_box.BoundingBox(
-      start=(box.start + off) // scale, size=ret.shape[::-1]
+      start=(box.start + off) // scale, size=ret.shape[::-1]  # pyrefly: ignore[bad-argument-type]
   )
   ret = ret[np.newaxis, ...]
   return out_box, ret
