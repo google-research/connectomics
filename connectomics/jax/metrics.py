@@ -342,9 +342,9 @@ def precision_recall_f1_bool(
   denominator = cm[:, 0, 0] + cm[:, 1, 0]
   r = jnp.where(denominator > 0, numerator / denominator, zero_division)
 
-  # f1: 2 * (precision * recall) / (precision + recall)
-  numerator = 2 * p * r
-  denominator = p + r
+  # Use counts so undefined precision or recall does not obscure a valid F1.
+  numerator = 2 * cm[:, 0, 0]
+  denominator = numerator + cm[:, 0, 1] + cm[:, 1, 0]
   f1 = jnp.where(denominator > 0, numerator / denominator, zero_division)
 
   return p, r, f1
