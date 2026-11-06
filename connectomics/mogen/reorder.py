@@ -194,8 +194,8 @@ def reorder_pc_ot(
     Tuple of reordered point clouds
   """
   assert pc_a.shape == pc_b.shape
-  geom = ott.geometry.pointcloud.PointCloud(pc_a, pc_b)
-  ot = ott.solvers.linear.sinkhorn.solve(geom)
+  geom = ott.geometry.pointcloud.PointCloud(pc_a, pc_b, relative_epsilon='mean')
+  ot = ott.solvers.linear.solve(geom)
   ind_a, ind_b = optax.assignment.hungarian_algorithm(-ot.matrix)
   # TODO(riegerfr): get indices directly without using optax/hungarian,
   # then assert valid permutation
