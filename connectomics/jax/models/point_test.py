@@ -150,6 +150,42 @@ class PointTest(absltest.TestCase):
     res = model.apply(params, feat, coord, feat, coord)
     self.assertEqual(res.shape, (2, 32, 16))
 
+  def test_local_aggregation_knn_duplicate_points(self):
+    # 4 distinct points, each repeated 8 times: the k=4 nearest neighbors of
+    # every anchor are its own copies, so all neighbor offsets are zero.
+    key = random.PRNGKey(0)
+    unique = np.random.default_rng(42).random([2, 4, 3]).astype(np.float32)
+    coord = np.repeat(unique, 8, axis=1)
+    feat = np.random.default_rng(43).random([2, 32, 5]).astype(np.float32)
+
+    mlp_config = point.GroupMLPConfig(
+        num_layers=1, features=16, pool_type='max', normalizer='layer'
+    )
+    la_config = point.LocalAggregationConfig(mlp_config=mlp_config, k=4)
+    model = point.LocalAggregation(la_config)
+    params = model.init(key, feat, coord, feat, coord)
+    res = model.apply(params, feat, coord, feat, coord)
+    self.assertEqual(res.shape, (2, 32, 16))
+    self.assertTrue(np.all(np.isfinite(res)))
+
+  def test_pointnext_classifier_degenerate_coords_finite(self):
+    enc_config = self.get_encoder_config()
+    key, feat, coord = self.get_key_feat_coord()  # All-zero coordinates.
+
+    cfg = point.PointNeXtClassifierConfig(
+        enc_config,
+        'max',
+        'layer',
+        [32, 64],
+        3,
+        pca_align=False,
+        num_vector_feats=0,
+    )
+    model = point.PointNeXtClassifier(cfg)
+    params = model.init(key, feat, coord)
+    res = model.apply(params, feat, coord)
+    self.assertTrue(np.all(np.isfinite(res)))
+
 
 if __name__ == '__main__':
   absltest.main()

@@ -299,11 +299,15 @@ class LocalAggregation(nn.Module):
     if cfg.radius is not None:
       delta_coord = delta_coord / cfg.radius
     else:
-      delta_coord /= jnp.max(
+      max_dist = jnp.max(
           jnp.linalg.norm(delta_coord, axis=-1, keepdims=True),
           axis=(-1, -2, -3),
           keepdims=True,
       )
+      # Guard against 0 / 0 when every neighbor coincides with its anchor
+      # (e.g. small point clouds padded with exact copies of their points).
+      # Leaves the result unchanged whenever max_dist > 0.
+      delta_coord /= jnp.maximum(max_dist, jnp.finfo(max_dist.dtype).tiny)
     new_feat = jnp.concatenate(
         [delta_coord, k_feat], axis=-1
     )  # [b, n, k, c + 3]
