@@ -159,12 +159,14 @@ def build_mask(
   if mask_volume_map is None:
     mask_volume_map = {}
 
-  z, y, x = np.mgrid[box.to_slice3d()]  # pylint:disable=unused-variable
+  x = y = z = None  # pylint:disable=unused-variable
   mask = None
   for config in masks:
     curr_mask = np.zeros(box.size[::-1], dtype=bool)
 
     if config.coordinate_expression is not None:
+      if x is None:
+        z, y, x = np.mgrid[box.to_slice3d()]  # pylint:disable=unused-variable
       bool_mask = eval(config.coordinate_expression.expression)  # pylint: disable=eval-used
       curr_mask |= bool_mask
     else:
@@ -172,6 +174,8 @@ def build_mask(
         assert image is not None
 
         if config.image.expression is not None:
+          if x is None:
+            z, y, x = np.mgrid[box.to_slice3d()]  # pylint:disable=unused-variable
           channels = []
           assert not config.image.channels
           curr_mask |= eval(config.image.expression)  # pylint: disable=eval-used
@@ -198,6 +202,8 @@ def build_mask(
           channel_mask = np.nan_to_num(channel_mask, chan_config.nan_value)  # pyrefly: ignore[no-matching-overload]
 
         if chan_config.expression:
+          if x is None:
+            z, y, x = np.mgrid[box.to_slice3d()]  # pylint:disable=unused-variable
           bool_mask = eval(chan_config.expression)  # pylint: disable=eval-used
         elif chan_config.values:
           bool_mask = np.isin(channel_mask, chan_config.values).reshape(

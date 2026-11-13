@@ -14,6 +14,8 @@
 # limitations under the License.
 """Tests for mask.py."""
 
+from unittest import mock
+
 from absl.testing import absltest
 from connectomics.common import bounding_box
 from connectomics.volume import mask as m
@@ -62,6 +64,48 @@ class MaskTest(absltest.TestCase):
 
     np.testing.assert_array_equal(
         mask, (image == 1) | (image == 5) | (image == 8)
+    )
+
+  def test_build_mask_lazy_mgrid(self):
+    subvol_size = (8, 10, 12)
+    image = np.arange(np.prod(subvol_size), dtype=np.int32).reshape(subvol_size)
+    box = bounding_box.BoundingBox(start=(2, 3, 4), size=subvol_size[::-1])
+
+    no_expr_config = m.MaskConfig.from_dict({
+        'image': {
+            'channels': [{
+                'channel': 0,
+                'min_value': 10,
+                'max_value': 100,
+            }],
+        }
+    })
+    with mock.patch.object(
+        type(np.mgrid),
+        '__getitem__',
+        side_effect=AssertionError('np.mgrid should not be evaluated'),
+    ):
+      res = m.build_mask(
+          [no_expr_config],
+          box,
+          decorated_volume_loader=lambda x: x,  # pyrefly: ignore[bad-argument-type]
+          image=image,
+      )
+    np.testing.assert_array_equal(res, (image >= 10) & (image <= 100))
+
+    coord_config = m.MaskConfig.from_dict({
+        'coordinate_expression': {
+            'expression': '(x >= 5) & (y < 7) & (z == 6)',
+        }
+    })
+    coord_res = m.build_mask(
+        [coord_config],
+        box,
+        decorated_volume_loader=lambda x: x,  # pyrefly: ignore[bad-argument-type]
+    )
+    z_grid, y_grid, x_grid = np.mgrid[box.to_slice3d()]
+    np.testing.assert_array_equal(
+        coord_res, (x_grid >= 5) & (y_grid < 7) & (z_grid == 6)
     )
 
 
