@@ -38,6 +38,10 @@ class SubvolumeProcessorTest(absltest.TestCase):
     p = Processor()
     self.assertEqual(subvolume_processor.OutputNums.SINGLE, p.output_num)
 
+  def test_allows_direct_chunks(self):
+    p = Processor()
+    self.assertTrue(p.allows_direct_chunks)
+
   def test_name_parts(self):
     p = Processor()
     self.assertEqual(('SubvolumeProcessor',), p.name_parts)

@@ -143,6 +143,12 @@ class SubvolumeProcessor:
   # only uses the type and geometry of the array for further processing.
   ignores_input_data = False
 
+  # Whether chunk-aligned zero-overlap runs may build output chunks directly
+  # from process() outputs without a GroupByKey shuffle. Set to False in
+  # subclasses whose output bounding boxes can shift, shrink, overlap, or
+  # differ from expected_output_box(subvol.bbox).
+  allows_direct_chunks: bool = True
+
   # Namespace to use for counters. Overridable by subclasses; defaults to
   # kebab-case of the class name.
   @property
