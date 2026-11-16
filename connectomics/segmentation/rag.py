@@ -34,7 +34,13 @@ def from_subvolume(vol3d: np.ndarray) -> nx.Graph:
   Returns:
     the corresponding RAG
   """
-  assert np.max(vol3d) < 2**32
+  assert vol3d.ndim == 3 and np.issubdtype(vol3d.dtype, np.integer)
+  if vol3d.size == 0:
+    return nx.Graph()
+  if np.issubdtype(vol3d.dtype, np.signedinteger):
+    assert np.min(vol3d) >= 0
+  if vol3d.dtype.itemsize > 4:
+    assert np.max(vol3d) < 2**32
 
   g = nx.Graph()
   for dim in 0, 1, 2:
@@ -44,14 +50,18 @@ def from_subvolume(vol3d: np.ndarray) -> nx.Graph:
     sel_base = [slice(None)] * 3
     sel_base[dim] = np.s_[1:]
 
-    a = vol3d[tuple(sel_offset)].ravel()
-    b = vol3d[tuple(sel_base)].ravel()
-    x = a | (b << 32)
-    x = x[a != b]
-    unique_joint_labels = np.unique(x)
+    v_a = vol3d[tuple(sel_offset)]
+    v_b = vol3d[tuple(sel_base)]
+    diff = v_a != v_b
+    a = v_a[diff].astype(np.uint64, copy=False)
+    b = v_b[diff].astype(np.uint64, copy=False)
+    lo = np.minimum(a, b)
+    hi = np.maximum(a, b)
+    unique_joint_labels = np.unique(lo | (hi << 32))
 
-    seg_nbor_pairs = set(
-        zip(unique_joint_labels & 0xFFFFFFFF, unique_joint_labels >> 32)
+    seg_nbor_pairs = zip(
+        (unique_joint_labels & 0xFFFFFFFF).tolist(),
+        (unique_joint_labels >> 32).tolist(),
     )
     g.add_edges_from(seg_nbor_pairs, dim=dim)
 

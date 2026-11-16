@@ -25,21 +25,66 @@ import skimage.morphology
 import skimage.segmentation
 
 
+def _try_dense_relabel(
+    labels: np.ndarray, orig_ids: np.ndarray, new_ids: np.ndarray
+) -> Optional[np.ndarray]:
+  """Relabels `labels` via an O(N) LUT when IDs are non-negative and bounded."""
+  if (
+      labels.size == 0
+      or orig_ids.size == 0
+      or not np.issubdtype(labels.dtype, np.integer)
+      or not np.issubdtype(orig_ids.dtype, np.integer)
+  ):
+    return None
+
+  min_orig = (
+      int(orig_ids.min())
+      if np.issubdtype(orig_ids.dtype, np.signedinteger)
+      else 0
+  )
+  max_orig = int(orig_ids.max())
+  if min_orig < 0 or max_orig >= 10_000_000:
+    return None
+
+  if np.issubdtype(labels.dtype, np.signedinteger):
+    if int(labels.min()) < 0:
+      return None
+  elif labels.dtype.kind == 'u' and labels.dtype.itemsize == 8:
+    # NumPy casts uint64 fancy indices to signed intp (int64), which wraps
+    # values >= 2**63 (e.g. 2**64 - 1 -> -1) as negative LUT indices.
+    signed_i8 = np.dtype(f'{labels.dtype.byteorder}i8')
+    if int(labels.view(signed_i8).min()) < 0:
+      raise IndexError('Label ID >= 2**63 is out of bounds for orig_ids.')
+
+  lut = np.zeros(max_orig + 1, dtype=new_ids.dtype)
+  lut[orig_ids] = new_ids
+  return lut[labels]
+
+
 def relabel(labels: np.ndarray, orig_ids: Iterable[int],
             new_ids: Iterable[int]) -> np.ndarray:
   """Relabels `labels` by mapping `orig_ids` to `new_ids`.
 
   Args:
-    labels: ndarray of segment IDs
+    labels: ndarray of segment IDs; every ID present in `labels` must appear in
+      `orig_ids`
     orig_ids: iterable of existing segment IDs
     new_ids: iterable of new segment IDs (len(new_ids) == len(orig_ids))
 
   Returns:
-    int64 ndarray with updated segment IDs
+    ndarray with updated segment IDs (same shape as `labels`, dtype of
+    `new_ids`)
+
+  Raises:
+    IndexError: If `labels` contains a segment ID exceeding `max(orig_ids)`.
   """
   orig_ids = np.asarray(orig_ids)
   new_ids = np.asarray(new_ids)
   assert orig_ids.size == new_ids.size
+
+  relabeled = _try_dense_relabel(labels, orig_ids, new_ids)
+  if relabeled is not None:
+    return relabeled
 
   sort_idx = np.argsort(orig_ids)
   sorted_orig_ids = orig_ids[sort_idx]
@@ -227,13 +272,10 @@ def split_disconnected_components(labels: np.ndarray, connectivity=1):
   Returns:
     The relabeled numpy array, same dtype as `labels`.
   """
-  has_zero = 0 in labels
   fixed_labels = skimage.measure.label(
       labels, connectivity=connectivity, background=0)
-  if has_zero or (not has_zero and 0 in fixed_labels):
-    if np.any((fixed_labels == 0) != (labels == 0)):
-      fixed_labels[...] += 1
-      fixed_labels[labels == 0] = 0
+  if labels.dtype == np.uint64 and fixed_labels.dtype == np.int64:
+    return fixed_labels.view(np.uint64)
   return np.asarray(fixed_labels, dtype=labels.dtype)
 
 
