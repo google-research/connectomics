@@ -469,7 +469,7 @@ def create_classification_metrics(
       pred = prob.argmax(axis=-1)
 
       if prob.shape[-1] == 2:
-        roc_prob = prob[:, 0]
+        roc_prob = prob[:, 1]
       else:
         roc_prob = prob
 
