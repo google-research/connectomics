@@ -65,6 +65,36 @@ class TrainState:
   min_s_mmd_train: float | None = None
 
 
+def reconstruct_posthoc_ema(
+    posthoc_emas: dict[str, Any] | tuple[Any, Any] | list[Any],
+    c: float | jnp.ndarray,
+) -> Any:
+  """Reconstructs target EMA parameters from EDM2 power-EMA accumulators.
+
+  theta_reconstructed = c * ema_gamma1 + (1 - c) * ema_gamma2.
+
+  Args:
+    posthoc_emas: Dict containing 'ema_gamma1' and 'ema_gamma2', or 2-tuple of
+      pytrees.
+    c: Mixing scalar weight in [0, 1].
+
+  Returns:
+    Reconstructed pytree with blended parameters.
+  """
+  if isinstance(posthoc_emas, dict):
+    ema1 = posthoc_emas['ema_gamma1']
+    ema2 = posthoc_emas['ema_gamma2']
+  else:
+    ema1, ema2 = posthoc_emas[0], posthoc_emas[1]
+  c_val = jnp.asarray(c, dtype=jnp.float32)
+  return jax.tree_util.tree_map(
+      lambda p1, p2: c_val * p1.astype(jnp.float32)
+      + (1.0 - c_val) * p2.astype(jnp.float32),
+      ema1,
+      ema2,
+  )
+
+
 def get_model(
     model_rng: jax.Array,
     init_coord: jax.Array,
@@ -119,6 +149,27 @@ def get_model(
             else jnp.float32,
         )
     )
+    if config.get('use_cudnn', False):
+      _orig_dpa = pointinfinity.vit.dot_product_attention
+
+      def _cudnn_dpa(query, key, value, **kwargs):
+        if (
+            jax.default_backend() == 'gpu'
+            and kwargs.get('mask') is None
+            and kwargs.get('bias') is None
+            and kwargs.get('dropout_rate', 0.0) == 0.0
+            and query.shape[1] % 128 == 0
+            and key.shape[1] % 128 == 0
+        ):
+          try:
+            return jax.nn.dot_product_attention(
+                query, key, value, is_causal=False, implementation='cudnn'
+            )
+          except Exception:
+            pass
+        return _orig_dpa(query, key, value, **kwargs)
+
+      pointinfinity.vit.MultiHeadDotProductAttention.attention_fn = _cudnn_dpa
   else:
     raise ValueError(f'Unknown model type: {config.model_type}')
 
@@ -136,6 +187,8 @@ def get_model(
       point_cond_mask=point_cond_mask,
   )
   params = variables['params']
+  if config.get('use_bf16', False):
+    params = jax.tree_util.tree_map(lambda p: p.astype(jnp.float32), params)
   batch_stats = variables.get('batch_stats', None)
   return model, params, batch_stats
 
@@ -161,6 +214,7 @@ def compute_loss(
     use_mst: bool = False,
     use_class_noise: bool = False,
     class_labels: jax.Array | None = None,
+    x_0_override: jax.Array | None = None,
 ) -> tuple[Any, dict[str, Any]]:
   """Computes the flow matching loss.
 
@@ -186,6 +240,7 @@ def compute_loss(
     use_mst: Whether to use MST.
     use_class_noise: Whether to use class-dependent noise.
     class_labels: Class labels for noise shifting.
+    x_0_override: Optional explicit noise x_0 to use for explorative modeling.
 
   Returns:
     Loss value and auxiliary outputs.
@@ -194,7 +249,10 @@ def compute_loss(
       jax.random.split(rng, 6)
   )
   x_1 = jnp.concatenate((coord, feat), axis=2) if feat is not None else coord
-  x_0 = jax.random.normal(rng_x, x_1.shape)
+  if x_0_override is not None:
+    x_0 = x_0_override
+  else:
+    x_0 = jax.random.normal(rng_x, x_1.shape)
   if use_class_noise and class_labels is not None:
     # Assume class_labels contains only 0 and 1. Map 0/1 to -1/+1.
     shift = class_labels[:, None, None] * 2.0 - 1.0
@@ -369,37 +427,20 @@ def update_state(
     use_class_noise: bool = False,
     class_labels: jax.Array | None = None,
     comp_loss: Callable[..., Any] = compute_loss,
-) -> tuple[TrainState, Any]:
-  """Performs a single training step.
+    k: int = 1,
+    external_grad: Any = None,
+    external_grad_weight: float = 0.0,
+    grad_only: bool = False,
+    update_scale: jax.Array | float | None = None,
+) -> tuple[Any, Any]:
+  """Performs a single training step (or returns (grad, aux) if grad_only=True).
 
-  Args:
-    model: Model to use.
-    state: Training state.
-    optimizer: Optimizer to use.
-    coord: Input coordinates (shape: (batch_size, n_points, 3)).
-    feat: Input features (shape: (batch_size, n_points, feat_dim)).
-    rng: PRNG key.
-    polyak_decay: Polyak decay factor.
-    schedule: Time schedule name.
-    cond: Conditioning for model input.
-    point_cond: Number of points to condition on.
-    do_ott: Whether to use optimal transport.
-    reorder_type: How to reorder the point cloud. ('none', 'axes', 'ot')
-    reorder_noise_strength: Strength of noise added after reordering.
-    point_cond_sample_threshold: Probability to sample points for conditioning.
-    feat_cond_dropout_threshold: Probability to drop features for conditioning.
-    lambda_cfm: CFM loss weight.
-    lambda_cond: Conditioning loss weight.
-    use_mst: Whether to use MST.
-    use_class_noise: Whether to use class-dependent noise.
-    class_labels: Class labels for noise shifting.
-    comp_loss: Loss function to use.
-
-  Returns:
-    Updated training state and auxiliary outputs.
+  If `update_scale` is given, the optimizer's parameter update is multiplied
+  by it (e.g. a learning-rate annealing factor in [0, 1]). The optimizer state
+  itself is unaffected, so this works with a warm-started optimizer state.
   """
 
-  def loss_fn(params):
+  def loss_fn(params, x_0_cand=None):
     variables = {'params': params}
     if state.batch_stats:
       variables['batch_stats'] = state.batch_stats
@@ -423,20 +464,68 @@ def update_state(
         use_mst=use_mst,
         use_class_noise=use_class_noise,
         class_labels=class_labels,
+        x_0_override=x_0_cand,
     )
 
   grad_fn = jax.grad(loss_fn, has_aux=True)
-  grad, aux = grad_fn(state.params)
-  updates, new_opt_state = optimizer.update(grad, state.opt_state, state.params)  # pyrefly: ignore[bad-argument-type]
+  if k <= 1:
+    grad, aux = grad_fn(state.params)
+  else:
+    rng_x = jax.random.split(rng, 6)[0]
+    rng_x_all = jax.random.split(rng_x, k)
+    x_1_shape = (
+        coord.shape[0],
+        coord.shape[1],
+        coord.shape[2] + (feat.shape[2] if feat is not None else 0),
+    )
+    x_0_candidates = jnp.stack(
+        [jax.random.normal(rng_x_all[i], x_1_shape) for i in range(k)]
+    )  # shape: (k, batch_size, n_points, dim)
+    elementwise_losses = jnp.stack([
+        loss_fn(state.params, x_0_candidates[i])[1]['elementwise_loss']
+        for i in range(k)
+    ])  # shape: (k, batch_size)
+    min_indices = jnp.argmin(elementwise_losses, axis=0)  # shape: (batch_size,)
+    best_x_0 = jax.vmap(lambda cands, idx: cands[idx])(
+        jnp.moveaxis(x_0_candidates, 1, 0), min_indices
+    )
+    grad, aux = grad_fn(state.params, best_x_0)
+
+  if grad_only:
+    return grad, aux
+
+  if external_grad is not None and external_grad_weight > 0.0:
+    w_ext = jnp.asarray(external_grad_weight, dtype=jnp.float32)
+    grad = jax.tree_util.tree_map(
+        lambda g_cur, g_ext: (1.0 - w_ext) * g_cur + w_ext * g_ext,
+        grad,
+        external_grad,
+    )
+
+  assert state.opt_state is not None
+  updates, new_opt_state = optimizer.update(grad, state.opt_state, state.params)
+  if update_scale is not None:
+    updates = jax.tree_util.tree_map(
+        lambda u: (u * update_scale).astype(u.dtype), updates
+    )
   new_params = optax.apply_updates(state.params, updates)
 
   # EMA from
   # http://google3/third_party/py/scenic/projects/modified_simple_diffusion/trainer.py;l=248;rcl=615399109
   decay_warmup = (1.0 + state.step) / (10.0 + state.step)
-  polyak_decay_updated = jnp.minimum(polyak_decay, decay_warmup)
+  polyak_decay_updated = jnp.where(
+      polyak_decay >= 1.0, 1.0, jnp.minimum(polyak_decay, decay_warmup)
+  )
   ema_params = jax.tree_util.tree_map(
-      lambda old, new: polyak_decay_updated * old
-      + (1 - polyak_decay_updated) * new,
+      lambda old, new: jnp.where(
+          polyak_decay >= 1.0,
+          old,
+          (
+              polyak_decay_updated.astype(jnp.float32) * old.astype(jnp.float32)
+              + (1.0 - polyak_decay_updated.astype(jnp.float32))
+              * new.astype(jnp.float32)
+          ).astype(old.dtype),
+      ),
       state.ema_params,
       new_params,
   )
@@ -462,7 +551,7 @@ def guided_apply(
     cond: jax.Array | None = None,
     point_cond_mask: jax.Array | None = None,
     guide: bool = False,
-) -> tuple[Any, dict[str, Any]]:
+) -> jax.Array:
   """Applies the model with optional guidance on a conditioning vector.
 
   Args:
@@ -648,6 +737,211 @@ def generate_step_rk4(
   return pred_end
 
 
+# ODE solvers supported by `generate_samples`. Velocity evaluations (NFE) per
+# solver step: euler 1, midpoint 2, heun 2, rk4 4. `rk4` keeps its historical
+# convention of taking `n_steps // 2` steps (2 * n_steps NFE like midpoint and
+# heun).
+SOLVERS = ('euler', 'midpoint', 'heun', 'rk4', 'ab2')
+
+
+def _keep_cond_points(
+    x_new: Any, x_t: jax.Array, point_cond_mask: jax.Array | None
+) -> Any:
+  """Resets conditioning points (point_cond_mask) to their values in x_t."""
+  if point_cond_mask is None:
+    return x_new
+  return (
+      x_new * (~point_cond_mask[:, :, None]) + x_t * point_cond_mask[:, :, None]
+  )
+
+
+def make_velocity_fn(
+    model: nn.Module,
+    state: TrainState,
+    cond: jax.Array | None = None,
+    point_cond_mask: jax.Array | None = None,
+    guidance_scale: jax.Array | None = None,
+    guide: bool = False,
+    autoguidance_params: Any = None,
+    autoguidance_weight: float = 1.0,
+    autoguidance_t_min: float = 0.0,
+    autoguidance_t_max: float = 1.0,
+    ag_decouple_scale: bool = False,
+) -> Callable[..., Any]:
+  """Returns the sampling velocity v(x_t, t) of the model.
+
+  The main model uses `state.ema_params`, as `generate_step_midpoint` does.
+  Autoguidance (Karras et al., 2024, arXiv:2406.02507): if
+  `autoguidance_params` is given (a "bad" version of the same architecture,
+  e.g. an early checkpoint), the velocity is
+  `v_bad + autoguidance_weight * (v_good - v_bad)`; weight 1 gives v_good.
+  Guidance is applied only for `autoguidance_t_min <= t <= autoguidance_t_max`
+  (limited guidance interval, arXiv:2404.07724; t=0 is noise, t=1 is data);
+  outside of it the plain good-model velocity is used. The default interval
+  [0, 1] guides at every t.
+
+  Args:
+    model: Model to use.
+    state: Training state (main model parameters in `state.ema_params`).
+    cond: Conditioning for model input.
+    point_cond_mask: Mask for points to condition on.
+    guidance_scale: Scale for conditioning guidance.
+    guide: Whether to apply conditioning guidance.
+    autoguidance_params: Parameters of the guiding (bad) model, or None.
+    autoguidance_weight: Autoguidance weight w.
+    autoguidance_t_min: Lower end of the autoguidance time interval.
+    autoguidance_t_max: Upper end of the autoguidance time interval.
+    ag_decouple_scale: If True, decouple radial/scale component from shape
+      guidance.
+
+  Returns:
+    Function (x_t of shape (batch, n_points, dim), t of shape (batch,)) ->
+    velocity of shape (batch, n_points, dim).
+  """
+  variables = {'params': state.ema_params}
+  if state.batch_stats:
+    variables['batch_stats'] = state.batch_stats
+  bad_variables = None
+  if autoguidance_params is not None:
+    bad_variables = {'params': autoguidance_params}
+    if state.batch_stats:
+      bad_variables['batch_stats'] = state.batch_stats
+
+  def velocity(x: jax.Array, t: jax.Array) -> Any:
+    pred: Any = guided_apply(
+        model,
+        variables,
+        x,
+        t,
+        cond=cond,
+        point_cond_mask=point_cond_mask,
+        guidance_scale=guidance_scale,
+        guide=guide,
+    )
+    if bad_variables is None:
+      return pred
+    pred_bad: Any = guided_apply(
+        model,
+        bad_variables,
+        x,
+        t,
+        cond=cond,
+        point_cond_mask=point_cond_mask,
+        guidance_scale=guidance_scale,
+        guide=guide,
+    )
+    if ag_decouple_scale:
+      delta_v = pred - pred_bad
+      c = jnp.mean(x[:, :, :3], axis=1, keepdims=True)
+      r = x[:, :, :3] - c
+      delta_v_centered = delta_v[:, :, :3] - jnp.mean(
+          delta_v[:, :, :3], axis=1, keepdims=True
+      )
+      num = jnp.sum(r * delta_v_centered, axis=(1, 2), keepdims=True)
+      denom = jnp.sum(r**2, axis=(1, 2), keepdims=True) + 1e-8
+      s = num / denom
+      delta_v_scale = s * r
+      delta_v_shape = delta_v[:, :, :3] - delta_v_scale
+      guided_3d = pred[:, :, :3] + (autoguidance_weight - 1.0) * delta_v_shape
+      if pred.shape[-1] > 3:
+        guided_feat = pred_bad[:, :, 3:] + autoguidance_weight * (
+            pred[:, :, 3:] - pred_bad[:, :, 3:]
+        )
+        guided = jnp.concatenate([guided_3d, guided_feat], axis=-1)
+      else:
+        guided = guided_3d
+    else:
+      guided = pred_bad + autoguidance_weight * (pred - pred_bad)
+    if autoguidance_t_min <= 0.0 and autoguidance_t_max >= 1.0:
+      return guided
+    inside = (t >= autoguidance_t_min) & (t <= autoguidance_t_max)
+    return jnp.where(
+        jnp.expand_dims(inside, range(1, guided.ndim)), guided, pred
+    )
+
+  return velocity
+
+
+def ode_step(
+    velocity_fn: Callable[..., Any],
+    x_t: jax.Array,
+    t_start: jax.Array,
+    t_end: jax.Array,
+    solver: str = 'midpoint',
+    point_cond_mask: jax.Array | None = None,
+    k_prev: jax.Array | None = None,
+    dt_prev: jax.Array | None = None,
+    return_k: bool = False,
+) -> Any:
+  """Performs one explicit ODE step of dx/dt = velocity_fn(x, t).
+
+  `solver='midpoint'` / `'rk4'` do the same arithmetic in the same order as
+  `generate_step_midpoint` / `generate_step_rk4`.
+
+  Args:
+    velocity_fn: Velocity function, see `make_velocity_fn`.
+    x_t: Current state of shape (batch_size, n_points, dim).
+    t_start: Start time (scalar or shape (1,)).
+    t_end: End time (scalar or shape (1,)).
+    solver: One of `SOLVERS`.
+    point_cond_mask: Mask of points that are kept fixed.
+    k_prev: Previous step velocity evaluation for multistep methods like 'ab2'.
+    dt_prev: Previous step size for multistep methods like 'ab2'.
+    return_k: Whether to return (x_new, k1) instead of x_new.
+
+  Returns:
+    State at t_end (or tuple of (state, k1) if return_k=True).
+  """
+  assert len(x_t.shape) == 3
+  solver_lower = solver.lower()
+  if solver_lower not in SOLVERS and solver_lower != 'adams_bashforth2':
+    raise ValueError(f'Unknown solver: {solver}')
+  t_start = (
+      jnp.repeat(t_start, x_t.shape[0], axis=0)
+      if t_start.ndim == 0 or t_start.shape[0] != x_t.shape[0]
+      else t_start
+  )
+  t_end = (
+      jnp.repeat(t_end, x_t.shape[0], axis=0)
+      if t_end.ndim == 0 or t_end.shape[0] != x_t.shape[0]
+      else t_end
+  )
+  dt = t_end - t_start
+  dt_exp = jnp.expand_dims(dt, range(1, len(x_t.shape)))
+
+  k1 = velocity_fn(x_t, t_start)
+  if solver_lower == 'euler':
+    x_new = x_t + dt_exp * k1
+  elif solver_lower == 'midpoint':
+    x_mid = _keep_cond_points(x_t + k1 * dt_exp / 2, x_t, point_cond_mask)
+    k2 = velocity_fn(x_mid, t_start + dt / 2)
+    x_new = x_t + dt_exp * k2
+  elif solver_lower == 'heun':
+    # Explicit trapezoidal rule (Heun's second-order method).
+    x_pred = _keep_cond_points(x_t + dt_exp * k1, x_t, point_cond_mask)
+    k2 = velocity_fn(x_pred, t_end)
+    x_new = x_t + dt_exp * (k1 + k2) / 2
+  elif solver_lower in ('ab2', 'adams_bashforth2'):
+    if k_prev is None or dt_prev is None or jnp.all(k_prev == 0.0):
+      x_new = x_t + dt_exp * k1
+    else:
+      dt_prev_exp = jnp.expand_dims(dt_prev, range(1, len(x_t.shape)))
+      coeff = dt_exp / (2.0 * dt_prev_exp)
+      x_new = x_t + dt_exp * ((1.0 + coeff) * k1 - coeff * k_prev)
+  else:  # rk4
+    x_k2 = _keep_cond_points(x_t + k1 * dt_exp / 2, x_t, point_cond_mask)
+    k2 = velocity_fn(x_k2, t_start + dt / 2)
+    x_k3 = _keep_cond_points(x_t + k2 * dt_exp / 2, x_t, point_cond_mask)
+    k3 = velocity_fn(x_k3, t_start + dt / 2)
+    x_k4 = _keep_cond_points(x_t + k3 * dt_exp, x_t, point_cond_mask)
+    k4 = velocity_fn(x_k4, t_end)
+    x_new = x_t + (k1 + 2 * k2 + 2 * k3 + k4) * dt_exp / 6
+  x_new = _keep_cond_points(x_new, x_t, point_cond_mask)
+  if return_k:
+    return x_new, k1
+  return x_new
+
+
 def generate_samples(
     model: nn.Module,
     state: TrainState,
@@ -665,6 +959,15 @@ def generate_samples(
     solver: str = 'midpoint',
     use_class_noise: bool = False,
     class_labels: jax.Array | None = None,
+    autoguidance_params: Any = None,
+    autoguidance_weight: float = 1.0,
+    autoguidance_t_min: float = 0.0,
+    autoguidance_t_max: float = 1.0,
+    ag_decouple_scale: bool = False,
+    noise_temp: float = 1.0,
+    churn: float = 0.0,
+    churn_tmin: float = 0.02,
+    churn_tmax: float = 0.95,
 ) -> jax.Array:
   """Generates samples from the model.
 
@@ -682,9 +985,19 @@ def generate_samples(
     point_cond_mask: Mask for points to condition on.
     guidance_scale: Guidance scale for guidance.
     guide: Whether to guide the model.
-    solver: The ODE solver to use ('midpoint' or 'rk4').
+    solver: The ODE solver to use, one of `SOLVERS` (default 'midpoint').
     use_class_noise: Whether to use class-dependent noise.
     class_labels: Class labels for noise shifting.
+    autoguidance_params: Parameters of an autoguidance (bad) model with the same
+      architecture (see `make_velocity_fn`); None disables autoguidance.
+    autoguidance_weight: Autoguidance weight w.
+    autoguidance_t_min: Autoguidance is applied for t >= this value.
+    autoguidance_t_max: Autoguidance is applied for t <= this value.
+    noise_temp: Sampling temperature: the prior noise is drawn from N(0,
+      noise_temp^2 I) (only when `noise` is None; 1.0 = unchanged).
+    churn: Stochastic churn factor (Karras et al. 2022 EDM Alg 2; 0.0 = ODE).
+    churn_tmin: Lower time bound for stochastic churn.
+    churn_tmax: Upper time bound for stochastic churn.
 
   Returns:
     x_gen: Generated samples (or history).
@@ -694,19 +1007,28 @@ def generate_samples(
   assert rng is not None or noise is not None
   assert guide == (guidance_scale is not None)
 
-  if solver == 'midpoint':
-    step_fn = generate_step_midpoint
-    effective_n_steps = n_steps
-  elif solver == 'rk4':
+  solver_lower = solver.lower()
+  if solver_lower not in SOLVERS and solver_lower != 'adams_bashforth2':
+    raise ValueError(f'Unknown solver: {solver}')
+  # Without new eval-time options the historical step functions are used, so
+  # that default sampling is unchanged.
+  use_legacy_step = (
+      autoguidance_params is None
+      and solver in ('midpoint', 'rk4')
+      and churn == 0.0
+  )
+  step_fn = generate_step_midpoint
+  effective_n_steps = n_steps
+  if solver == 'rk4':
     step_fn = generate_step_rk4
     effective_n_steps = n_steps // 2
-  else:
-    raise ValueError(f'Unknown solver: {solver}')
 
   if noise is None:
     x_0 = jax.random.normal(
         rng, (cond.shape[0] if cond is not None else n_samples, *sample_shape)  # pyrefly: ignore[bad-argument-type]
     )
+    if noise_temp != 1.0:
+      x_0 = x_0 * noise_temp
     if use_class_noise and class_labels is not None:
       # Map 0/1 to -1/+1
       shift = class_labels[:, None, None] * 2.0 - 1.0
@@ -717,17 +1039,123 @@ def generate_samples(
       jnp.linspace(0.0, 1.0, effective_n_steps + 1), schedule
   )
 
+  velocity_fn = make_velocity_fn(
+      model,
+      state,
+      cond=cond,
+      point_cond_mask=point_cond_mask,
+      guidance_scale=guidance_scale,
+      guide=guide,
+      autoguidance_params=autoguidance_params,
+      autoguidance_weight=autoguidance_weight,
+      autoguidance_t_min=autoguidance_t_min,
+      autoguidance_t_max=autoguidance_t_max,
+      ag_decouple_scale=ag_decouple_scale,
+  )
+
+  if solver_lower in ('ab2', 'adams_bashforth2'):
+    batch_size = x_0.shape[0]
+    t0 = (
+        jnp.repeat(timesteps[0], batch_size, axis=0)
+        if timesteps[0].ndim == 0
+        else timesteps[0]
+    )
+    t1 = (
+        jnp.repeat(timesteps[1], batch_size, axis=0)
+        if timesteps[1].ndim == 0
+        else timesteps[1]
+    )
+    dt0 = t1 - t0
+    dt0_exp = jnp.expand_dims(dt0, range(1, len(x_0.shape)))
+    k0 = velocity_fn(x_0, t0)
+    x_1 = x_0 + dt0_exp * k0
+    if point_cond_mask is not None:
+      x_1 = _keep_cond_points(x_1, x_0, point_cond_mask)
+
+    def body_ab2(i, carry):
+      x_cur, k_prev, dt_prev = carry
+      t_cur = (
+          jnp.repeat(timesteps[i], batch_size, axis=0)
+          if timesteps[i].ndim == 0
+          else timesteps[i]
+      )
+      t_next = (
+          jnp.repeat(timesteps[i + 1], batch_size, axis=0)
+          if timesteps[i + 1].ndim == 0
+          else timesteps[i + 1]
+      )
+      dt = t_next - t_cur
+      dt_exp = jnp.expand_dims(dt, range(1, len(x_cur.shape)))
+      dt_prev_exp = jnp.expand_dims(dt_prev, range(1, len(x_cur.shape)))
+      k_cur = velocity_fn(x_cur, t_cur)
+      coeff = dt_exp / (2.0 * dt_prev_exp)
+      x_next = x_cur + dt_exp * ((1.0 + coeff) * k_cur - coeff * k_prev)
+      if point_cond_mask is not None:
+        x_next = _keep_cond_points(x_next, x_cur, point_cond_mask)
+      return (x_next, k_cur, dt)
+
+    init_carry = (x_1, k0, dt0)
+    if return_history:
+      history = [x_0, x_1]
+      carry = init_carry
+      for i in tqdm.tqdm(range(1, effective_n_steps)):
+        carry = body_ab2(i, carry)
+        history.append(carry[0])
+      return jnp.stack(history, axis=1)
+    else:
+      if effective_n_steps == 1:
+        return x_1
+      final_carry = jax.lax.fori_loop(
+          1, effective_n_steps, body_ab2, init_carry
+      )
+      return final_carry[0]
+
   def body_fun(i, x_t):
-    return step_fn(
-        model,
-        state,
-        x_t,
-        t_start=timesteps[i],
-        t_end=timesteps[i + 1],
-        cond=cond,
+    if churn == 0.0:
+      if not use_legacy_step:
+        return ode_step(
+            velocity_fn,
+            x_t,
+            timesteps[i],
+            timesteps[i + 1],
+            solver=solver,
+            point_cond_mask=point_cond_mask,
+        )
+      return step_fn(
+          model,
+          state,
+          x_t,
+          t_start=timesteps[i],
+          t_end=timesteps[i + 1],
+          cond=cond,
+          point_cond_mask=point_cond_mask,
+          guidance_scale=guidance_scale,
+          guide=guide,
+      )
+
+    assert rng is not None, 'rng is required when churn > 0'
+    t_i = timesteps[i]
+    safe_t = jnp.where(t_i > 0, t_i, 1.0)
+    sigma = (1.0 - safe_t) / safe_t
+    sigma_hat = sigma * (1.0 + churn)
+    t_hat_cand = 1.0 / (1.0 + sigma_hat)
+    a = t_hat_cand / safe_t
+    b_sq = jnp.maximum((1.0 - t_hat_cand) ** 2 - (a * (1.0 - safe_t)) ** 2, 0.0)
+    b = jnp.sqrt(b_sq)
+    do_churn = (t_i >= churn_tmin) & (t_i <= churn_tmax)
+    t_start = jnp.where(do_churn, t_hat_cand, t_i)
+    step_rng = jax.random.fold_in(rng, i)
+    z = jax.random.normal(step_rng, x_t.shape, dtype=x_t.dtype)
+    x_hat = jnp.where(do_churn, a * x_t + b * z, x_t)
+    if point_cond_mask is not None:
+      x_hat = _keep_cond_points(x_hat, x_t, point_cond_mask)
+    return ode_step(
+        velocity_fn,
+        x_hat,
+        t_start,
+        timesteps[i + 1],
+        solver=solver,
         point_cond_mask=point_cond_mask,
-        guidance_scale=guidance_scale,
-        guide=guide,
     )
 
   if return_history:
@@ -800,6 +1228,8 @@ def get_optimizer(
   """
   optimizers = {
       'adamw': optax.adamw,
+      'adamc': optax.adamw,
+      'adamw_cosine': optax.adamw,
       'prodigy': optax.contrib.prodigy,
       'schedule_free_adamw': optax.contrib.schedule_free_adamw,
   }
@@ -862,6 +1292,7 @@ def prep_data(
     n_combine_samples: int = 1,
     use_feat: bool = False,
     add_dummy_cond: bool = False,
+    subsample_key: jax.Array | None = None,
 ) -> tuple[jax.Array, jax.Array | None, jax.Array | None]:
   """Preprocesses the data.
 
@@ -879,6 +1310,7 @@ def prep_data(
     n_combine_samples: Number of samples to combine.
     use_feat: Whether to use features.
     add_dummy_cond: Whether to add a dummy feature to cond.
+    subsample_key: Optional PRNG key for random initial point in subsampling.
 
   Returns:
     Preprocessed data.
@@ -888,9 +1320,7 @@ def prep_data(
 
   if clip:
     coord = jnp.clip(coord, -1.0, 1.0)
-  coord, idx = spatial.subsample_points(
-      coord, n_points
-  )  # TODO(riegerfr): use rng here for additional augmentation
+  coord, idx = spatial.subsample_points(coord, n_points, key=subsample_key)
   feat = (
       point.batch_lookup(feat, idx[..., None])[..., 0, :] if use_feat else None  # pyrefly: ignore[bad-argument-type]
   )
@@ -1060,23 +1490,33 @@ def plot_point_clouds(
       mst_adj = np.asarray(prim_mst(dists[None, :, :])[0])  # Remove batch dim
       color_idx = i * color_map_multiplier if use_multiplier else i
       default_color = color_map[color_idx % len(color_map)]
-      for j in range(n_points):
-        for k in range(j + 1, n_points):
-          if mst_adj[j, k] > 0:
-            line_x = [points[j, 0], points[k, 0]]
-            line_y = [points[j, 1], points[k, 1]]
-            line_z = [points[j, 2], points[k, 2]]
-            scatter_plots.append(
-                go.Scatter3d(
-                    x=line_x,
-                    y=line_y,
-                    z=line_z,
-                    mode='lines',
-                    line=dict(color=default_color, width=2),
-                    name=f'PC {i} MST Edge',
-                    showlegend=(j == 0 and k == 1),
-                )
+      u_idx, v_idx = np.where(np.triu(mst_adj, k=1) > 0)
+      if u_idx.size > 0:
+        n_e = u_idx.size
+        lx = np.empty(n_e * 3, dtype=object)
+        ly = np.empty(n_e * 3, dtype=object)
+        lz = np.empty(n_e * 3, dtype=object)
+        lx[0::3] = points[u_idx, 0]
+        lx[1::3] = points[v_idx, 0]
+        lx[2::3] = None
+        ly[0::3] = points[u_idx, 1]
+        ly[1::3] = points[v_idx, 1]
+        ly[2::3] = None
+        lz[0::3] = points[u_idx, 2]
+        lz[1::3] = points[v_idx, 2]
+        lz[2::3] = None
+        scatter_plots.append(
+            go.Scatter3d(
+                x=lx.tolist(),
+                y=ly.tolist(),
+                z=lz.tolist(),
+                mode='lines',
+                line=dict(color=default_color, width=2),
+                name=f'Example {i} MST',
+                legendgroup=f'pc_{i}',
+                showlegend=True,
             )
+        )
 
   fig = go.Figure(data=scatter_plots)
   fig.update_layout(
@@ -1774,12 +2214,179 @@ def compute_metrics(
   logging.info('embs_val shape: %r', embs_val.shape)
   mmd_train = distance.mmd(embs_gen, embs_train)
   mmd_val = distance.mmd(embs_gen, embs_val)
-  fid_train = 10_000  # TODO(riegerfr): remove
-  fid_val = 10_000
+  fid_train = frechet_distance(embs_gen, embs_train)
+  fid_val = frechet_distance(embs_gen, embs_val)
   mmd_train_sub = distance.mmd(embs_gen[:, :8], embs_train[:, :8])
   mmd_val_sub = distance.mmd(embs_gen[:, :8], embs_val[:, :8])
 
   return mmd_train, mmd_val, fid_train, fid_val, mmd_train_sub, mmd_val_sub
+
+
+def frechet_distance(a: Any, b: Any) -> float:
+  """Frechet distance between Gaussians fitted to two embedding sets.
+
+  ||mu_a - mu_b||^2 + tr(S_a) + tr(S_b) - 2 tr((S_a S_b)^{1/2}), with the
+  matrix square root trace computed as sum(sqrt(eig(S_a^{1/2} S_b S_a^{1/2})))
+  (symmetric PSD, numpy only).
+
+  Args:
+    a: [n, d] embeddings.
+    b: [m, d] embeddings.
+
+  Returns:
+    The Frechet distance as a Python float.
+  """
+  a = np.asarray(jax.device_get(a), dtype=np.float64)
+  b = np.asarray(jax.device_get(b), dtype=np.float64)
+  mu_a, mu_b = a.mean(axis=0), b.mean(axis=0)
+  cov_a = np.atleast_2d(np.cov(a, rowvar=False))
+  cov_b = np.atleast_2d(np.cov(b, rowvar=False))
+  w_a, v_a = np.linalg.eigh(cov_a)
+  sqrt_a = (v_a * np.sqrt(np.clip(w_a, 0.0, None))) @ v_a.T
+  m = sqrt_a @ cov_b @ sqrt_a
+  m = 0.5 * (m + m.T)
+  tr_covmean = np.sqrt(np.clip(np.linalg.eigvalsh(m), 0.0, None)).sum()
+  diff = mu_a - mu_b
+  return float(
+      diff @ diff + np.trace(cov_a) + np.trace(cov_b) - 2.0 * tr_covmean
+  )
+
+
+def _sq_dists(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+  return (a**2).sum(-1)[:, None] + (b**2).sum(-1)[None, :] - 2.0 * a @ b.T
+
+
+def _knn_radius(x: np.ndarray, k: int) -> np.ndarray:
+  """Distance of every row of `x` to its k-th nearest other row of `x`."""
+  d = np.sqrt(np.maximum(_sq_dists(x, x), 0.0))
+  return np.sort(d, axis=1)[:, k]  # column 0 is the point itself
+
+
+def diversity_metrics(
+    embs_gen: np.ndarray,
+    embs_real: np.ndarray,
+    k: int = 5,
+    n_real: int = 2048,
+) -> dict[str, float]:
+  """Diversity diagnostics of generated vs real (already normalised) embeddings.
+
+  The s_mmd kernel (sigma=10 on ~10-D standardised features) is dominated by
+  the mean difference, so a low-variance generator can score well. These
+  statistics expose variance shrinkage / mode dropping:
+    std_ratio: mean over features of std(gen) / std(real) (1 = matched).
+    std_ratio_min: min over features of that ratio.
+    coverage: fraction of real samples whose k-NN ball (among real) contains
+      at least one generated sample (Naeem et al. 2020).
+    recall: fraction of real samples inside at least one generated sample's
+      k-NN ball among generated (Kynkaanniemi et al. 2019).
+    precision: fraction of generated samples inside some real k-NN ball.
+
+  Args:
+    embs_gen: [n_gen, d] generated embeddings.
+    embs_real: [n, d] real embeddings (only the first `n_real` rows are used).
+    k: Nearest-neighbour index for the ball radii.
+    n_real: Number of real rows to use.
+
+  Returns:
+    Dict of float statistics.
+  """
+  gen = np.asarray(embs_gen, np.float64)
+  real = np.asarray(embs_real, np.float64)[:n_real]
+  real_std = real.std(axis=0)
+  ratio = gen.std(axis=0) / np.where(real_std == 0, 1.0, real_std)
+  r_real = _knn_radius(real, k)
+  r_gen = _knn_radius(gen, k)
+  d_rg = np.sqrt(np.maximum(_sq_dists(real, gen), 0.0))  # [n_real, n_gen]
+  coverage = (d_rg.min(axis=1) < r_real).mean()
+  recall = (d_rg < r_gen[None, :]).any(axis=1).mean()
+  precision = (d_rg < r_real[:, None]).any(axis=0).mean()
+  return {
+      'std_ratio': float(ratio.mean()),
+      'std_ratio_min': float(ratio.min()),
+      'coverage': float(coverage),
+      'recall': float(recall),
+      'precision': float(precision),
+  }
+
+
+def reference_diversity_baselines(
+    embs_val: np.ndarray, n_gen: int = 512, k: int = 5, n_real: int = 2048
+) -> dict[str, float]:
+  """s_mmd / diversity of simple real-data baselines against the val bank.
+
+  Rows [0, n_real) are the reference bank for coverage; the pseudo-generator
+  uses the last `n_gen` rows (disjoint when len(embs_val) >= n_real + n_gen).
+  Baselines: `real` (held-out real), `shrink50` (real shrunk 50% towards the
+  bank mean, i.e. a half-std generator) and `collapsed` (all at the mean).
+
+  Args:
+    embs_val: [n, d] normalised val embeddings.
+    n_gen: Size of the pseudo-generated set.
+    k: See `diversity_metrics`.
+    n_real: See `diversity_metrics`.
+
+  Returns:
+    Dict with `ref_{baseline}_{s_mmd_val_mst,coverage,std_ratio}`.
+  """
+  embs_val = np.asarray(embs_val, np.float32)
+  held = embs_val[-n_gen:]
+  mu = embs_val.mean(axis=0, keepdims=True)
+  out = {}
+  for name, fake in (
+      ('real', held),
+      ('shrink50', mu + 0.5 * (held - mu)),
+      ('collapsed', np.repeat(mu, n_gen, axis=0)),
+  ):
+    out[f'ref_{name}_s_mmd_val_mst'] = float(
+        jax.device_get(distance.mmd(fake, embs_val))
+    )
+    div = diversity_metrics(fake, embs_val, k=k, n_real=n_real)
+    out[f'ref_{name}_coverage'] = div['coverage']
+    out[f'ref_{name}_std_ratio'] = div['std_ratio']
+  return out
+
+
+def compute_metrics_and_diversity(
+    x_gen: jax.Array,
+    cfg: ml_collections.ConfigDict,
+    with_reference: bool = False,
+) -> tuple[tuple[float, float, float, float, float, float], dict[str, float]]:
+  """`compute_metrics` (defaults) plus `diversity_metrics` on the val bank.
+
+  Embeddings are computed once, so this costs about as much as
+  `compute_metrics`.
+
+  Args:
+    x_gen: Generated points.
+    cfg: Configuration.
+    with_reference: Also return `reference_diversity_baselines`.
+
+  Returns:
+    (compute_metrics tuple, diversity dict).
+  """
+  batch_size = min(4, cfg.batch_size)
+  embs_gen = jax.numpy.concatenate([
+      simple_embs(x_gen[i * batch_size : (i + 1) * batch_size], True)  # pytype: disable=wrong-arg-types
+      for i in range(x_gen.shape[0] // batch_size)
+  ])
+  embs_train = load_embeddings(cfg, 'train', subset_size=16384, mst=True)
+  embs_val = load_embeddings(cfg, 'val', subset_size=16384, mst=True)
+  train_std = embs_train.std(axis=0, keepdims=True)  # pytype: disable=attribute-error
+  embs_gen = embs_gen / train_std
+  embs_train = embs_train / train_std
+  embs_val = embs_val / train_std
+  metrics = (
+      distance.mmd(embs_gen, embs_train),
+      distance.mmd(embs_gen, embs_val),
+      frechet_distance(embs_gen, embs_train),
+      frechet_distance(embs_gen, embs_val),
+      distance.mmd(embs_gen[:, :8], embs_train[:, :8]),
+      distance.mmd(embs_gen[:, :8], embs_val[:, :8]),
+  )
+  div = diversity_metrics(np.asarray(jax.device_get(embs_gen)), embs_val)
+  if with_reference:
+    div.update(reference_diversity_baselines(embs_val))
+  return metrics, div  # pyrefly: ignore[bad-return]
 
 
 def save_point_clouds_svg(
