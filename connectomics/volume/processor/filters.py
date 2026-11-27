@@ -34,18 +34,20 @@ class HighPass(subvolume_processor.SubvolumeProcessor):
   Lichtman lab for low-resolution visualization of the h01 dataset.
   """
 
+  crop_at_borders = False
+
   def process(self, subvol: subvolume.Subvolume) -> subvolume.SubvolumeOrMany:
     box = subvol.bbox
     input_ndarray = subvol.data
-    img = input_ndarray[0, 0, ...]
-    hp = img + ndimage.minimum_filter(255 - img, 3)
-    return self.crop_box_and_data(box, hp[np.newaxis, np.newaxis, ...])
+    img = input_ndarray[0, ...]
+    hp = img + ndimage.minimum_filter(255 - img, size=(1, 3, 3))
+    return self.crop_box_and_data(box, hp[np.newaxis, ...])
 
   def context(self):
     return SuggestedXyz(3, 3, 0), SuggestedXyz(3, 3, 0)
 
   def subvolume_size(self):
-    return SuggestedXyz(1024, 1024, 1)
+    return SuggestedXyz(1024, 1024, 64)
 
 
 class ApplyFilter(subvolume_processor.SubvolumeProcessor):
